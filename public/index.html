@@ -463,7 +463,11 @@ async function loadManagedProxiesForSessions(){
 async function setSessionProxy(id,sel){
   const proxy=sel.value||null;
   await fetch('/api/sessions/'+id+'/proxy',{method:'PUT',headers:H(),body:JSON.stringify({proxy})});
-  setTimeout(loadSessions,3000);
+  // Update local state immediately so UI doesn't flicker back
+  const s=allSessions.find(x=>x.id===id);
+  if(s) s.proxy=proxy;
+  renderSessions();
+  setTimeout(loadSessions,5000);
 }
 async function toggleAutoRotate(id,enabled){
   const s=allSessions.find(x=>x.id===id);

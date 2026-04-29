@@ -121,15 +121,17 @@ function getNextWorkingProxy(currentProxy) {
 }
 
 function createSession(id, proxyAddr) {
-  if (sessions.has(id)) { const s = sessions.get(id); if (['ready','initializing','qr_ready'].includes(s.status)) return s; try{s.client.destroy();}catch(e){} }
-  // Use saved proxy config if not explicitly provided
-  if (!proxyAddr && sessionProxyConfig[id]?.proxy) proxyAddr = sessionProxyConfig[id].proxy;
+  if (sessions.has(id)) { const s = sessions.get(id); if (['ready','initializing','qr_ready'].includes(s.status)) return s; s._manualStop = true; try{s.client.destroy();}catch(e){} }
+  // Always read from saved proxy config
+  if (proxyAddr === undefined && sessionProxyConfig[id]?.proxy) proxyAddr = sessionProxyConfig[id].proxy;
+  // proxyAddr: undefined = use saved config, null = force no proxy, string = use this proxy
+  const finalProxy = (proxyAddr === null) ? null : (proxyAddr || null);
   const puppeteerArgs = ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-extensions'];
-  if (proxyAddr) {
-    puppeteerArgs.push(`--proxy-server=${proxyAddr}`);
-    console.log(`[WA:${id}] Using proxy: ${proxyAddr}`);
+  if (finalProxy) {
+    puppeteerArgs.push(`--proxy-server=${finalProxy}`);
+    console.log(`[WA:${id}] Using proxy: ${finalProxy}`);
   }
-  const sess = { client: null, qr: null, status: 'initializing', phone: null, name: null, createdAt: new Date(), proxy: proxyAddr || null };
+  const sess = { client: null, qr: null, status: 'initializing', phone: null, name: null, createdAt: new Date(), proxy: finalProxy };
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: id, dataPath: '/opt/wa-gateway/sessions' }),
     puppeteer: { headless: true, args: puppeteerArgs, timeout: 120000 },
@@ -140,7 +142,7 @@ function createSession(id, proxyAddr) {
   client.on('ready', () => { sess.qr = null; sess.status = 'ready'; const i = client.info; sess.phone = i?.wid?.user; sess.name = i?.pushname; console.log(`[WA:${id}] Ready: ${sess.phone} ${sess.proxy ? '(proxy: '+sess.proxy+')' : '(direct)' }`); });
   client.on('authenticated', () => { sess.status = 'authenticated'; });
   client.on('auth_failure', m => { sess.status = 'auth_failure'; });
-  client.on('disconnected', r => { sess.status = 'disconnected'; sess.phone = null; sess.name = null; sess.qr = null; if (!sess._manualStop) setTimeout(() => createSession(id), 5000); });
+  client.on('disconnected', r => { sess.status = 'disconnected'; sess.phone = null; sess.name = null; sess.qr = null; if (!sess._manualStop) setTimeout(() => createSession(id, undefined), 5000); });
   sess.client = client; sessions.set(id, sess);
   client.initialize().catch(e => { console.error(`[WA:${id}] Error: ${e.message}`); sess.status = 'error'; });
   return sess;
@@ -221,8 +223,10 @@ app.put('/api/sessions/:id/proxy', async (req, res) => {
       s._manualStop = true;
       await s.client.destroy();
     } catch(e) {}
-    s._manualStop = false;
-    createSession(id, proxy || undefined);
+    // Remove old session entry so createSession starts fresh
+    sessions.delete(id);
+    // Small delay to ensure cleanup
+    setTimeout(() => createSession(id, proxy || null), 2000);
     res.json({ message: proxy ? `Proxy set to ${proxy}, session restarting` : 'Proxy removed, session restarting (direct)', id, proxy: proxy || null, autoRotate });
   } else {
     res.json({ message: 'Proxy config saved', id, proxy: proxy || null, autoRotate });
