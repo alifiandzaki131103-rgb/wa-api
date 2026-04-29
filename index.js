@@ -111,7 +111,7 @@ function createSession(id) {
   client.on('ready', () => { sess.qr = null; sess.status = 'ready'; const i = client.info; sess.phone = i?.wid?.user; sess.name = i?.pushname; console.log(`[WA:${id}] Ready: ${sess.phone}`); });
   client.on('authenticated', () => { sess.status = 'authenticated'; });
   client.on('auth_failure', m => { sess.status = 'auth_failure'; });
-  client.on('disconnected', r => { sess.status = 'disconnected'; sess.phone = null; sess.name = null; sess.qr = null; setTimeout(() => createSession(id), 5000); });
+  client.on('disconnected', r => { sess.status = 'disconnected'; sess.phone = null; sess.name = null; sess.qr = null; if (!sess._manualStop) setTimeout(() => createSession(id), 5000); });
   sess.client = client; sessions.set(id, sess);
   client.initialize().catch(e => { console.error(`[WA:${id}] Error: ${e.message}`); sess.status = 'error'; });
   return sess;
@@ -131,10 +131,27 @@ app.get('/api/sessions/:id/qr', async (req, res) => {
   const s = sessions.get(req.params.id); if (!s || !s.qr) return res.status(404).json({ error: 'No QR' });
   try { const b = await qrcode.toDataURL(s.qr); res.json({ qr: b.replace('data:image/png;base64,', '') }); } catch(e) { res.status(500).json({ error: e.message }); }
 });
+// Stop session (keep in list, just disconnect)
+app.post('/api/sessions/:id/stop', async (req, res) => {
+  const s = sessions.get(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Session not found' });
+  try {
+    s._manualStop = true;
+    if (s.client) await s.client.destroy();
+    s.status = 'stopped'; s.phone = null; s.name = null; s.qr = null; s.client = null;
+    res.json({ message: 'Stopped', id: req.params.id });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Delete session (remove completely + optional logout)
 app.delete('/api/sessions/:id', async (req, res) => {
   const s = sessions.get(req.params.id);
   try {
-    if (s?.client) { if (req.query.logout==='true') await s.client.logout(); await s.client.destroy(); }
+    if (s?.client) {
+      s._manualStop = true;
+      if (req.query.logout==='true') await s.client.logout();
+      await s.client.destroy();
+    }
     sessions.delete(req.params.id);
     if (req.query.logout==='true') { const d='/opt/wa-gateway/sessions/session-'+req.params.id; if(fs.existsSync(d)) fs.rmSync(d,{recursive:true,force:true}); }
     res.json({ message: 'Deleted' });
