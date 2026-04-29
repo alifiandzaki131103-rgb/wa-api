@@ -313,6 +313,143 @@ app.post('/api/proxy/stop', (req, res) => {
   res.json({ message: 'Stopped' });
 });
 
+// ============ PROXY MANAGER ============
+const PROXIES_FILE = '/opt/wa-gateway/proxies.json';
+const PROXY_SETTINGS_FILE = '/opt/wa-gateway/proxy-settings.json';
+let managedProxies = [];
+let proxyAutoTestInterval = null;
+let proxyAutoTestSettings = { enabled: false, intervalMinutes: 5, autoDeleteFailed: false };
+
+function loadProxies() {
+  try { managedProxies = JSON.parse(fs.readFileSync(PROXIES_FILE, 'utf8')); } catch(e) { managedProxies = []; }
+}
+function saveProxies() { fs.writeFileSync(PROXIES_FILE, JSON.stringify(managedProxies, null, 2)); }
+function loadProxySettings() {
+  try { proxyAutoTestSettings = JSON.parse(fs.readFileSync(PROXY_SETTINGS_FILE, 'utf8')); } catch(e) {}
+}
+function saveProxySettings() { fs.writeFileSync(PROXY_SETTINGS_FILE, JSON.stringify(proxyAutoTestSettings, null, 2)); }
+loadProxies();
+loadProxySettings();
+
+function timeStr() { const d = new Date(); return d.toTimeString().split(' ')[0].slice(0,8); }
+
+async function testManagedProxy(proxy) {
+  proxy.status = 'testing';
+  const result = await validateProxy(proxy.host, parseInt(proxy.port));
+  proxy.status = result.working ? 'ok' : 'failed';
+  proxy.latency = result.working ? result.latency : null;
+  proxy.lastChecked = timeStr();
+  return proxy;
+}
+
+async function testAllManagedProxies() {
+  const batch = 50;
+  for (let i = 0; i < managedProxies.length; i += batch) {
+    const chunk = managedProxies.slice(i, i + batch);
+    await Promise.all(chunk.map(p => testManagedProxy(p)));
+  }
+  if (proxyAutoTestSettings.autoDeleteFailed) {
+    managedProxies = managedProxies.filter(p => p.status !== 'failed');
+  }
+  saveProxies();
+}
+
+function setupAutoTest() {
+  if (proxyAutoTestInterval) { clearInterval(proxyAutoTestInterval); proxyAutoTestInterval = null; }
+  if (proxyAutoTestSettings.enabled && proxyAutoTestSettings.intervalMinutes > 0) {
+    const ms = proxyAutoTestSettings.intervalMinutes * 60 * 1000;
+    proxyAutoTestInterval = setInterval(() => testAllManagedProxies(), ms);
+    console.log(`[Proxy Manager] Auto-test every ${proxyAutoTestSettings.intervalMinutes}min`);
+  }
+}
+setupAutoTest();
+
+app.get('/api/proxy/manager/list', (req, res) => {
+  const stats = { total: managedProxies.length, ok: managedProxies.filter(p=>p.status==='ok').length, failed: managedProxies.filter(p=>p.status==='failed').length };
+  res.json({ proxies: managedProxies, stats });
+});
+
+app.post('/api/proxy/manager/add', (req, res) => {
+  const { host, port, type, proxies } = req.body;
+  const added = [];
+  if (proxies && Array.isArray(proxies)) {
+    proxies.forEach(p => {
+      const parts = p.trim().split(':');
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        const exists = managedProxies.find(m => m.host === parts[0] && m.port === parseInt(parts[1]));
+        if (!exists) {
+          const proxy = { id: crypto.randomBytes(4).toString('hex'), host: parts[0], port: parseInt(parts[1]), type: type || 'HTTP', region: '—', status: 'unknown', latency: null, lastChecked: '—', addedAt: new Date().toISOString() };
+          managedProxies.push(proxy); added.push(proxy);
+        }
+      }
+    });
+  } else if (host && port) {
+    const exists = managedProxies.find(m => m.host === host && m.port === parseInt(port));
+    if (!exists) {
+      const proxy = { id: crypto.randomBytes(4).toString('hex'), host, port: parseInt(port), type: type || 'HTTP', region: '—', status: 'unknown', latency: null, lastChecked: '—', addedAt: new Date().toISOString() };
+      managedProxies.push(proxy); added.push(proxy);
+    }
+  }
+  saveProxies();
+  res.json({ added: added.length, total: managedProxies.length });
+});
+
+app.delete('/api/proxy/manager/:id', (req, res) => {
+  const idx = managedProxies.findIndex(p => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  managedProxies.splice(idx, 1); saveProxies();
+  res.json({ message: 'Deleted', total: managedProxies.length });
+});
+
+app.post('/api/proxy/manager/:id/test', async (req, res) => {
+  const proxy = managedProxies.find(p => p.id === req.params.id);
+  if (!proxy) return res.status(404).json({ error: 'Not found' });
+  await testManagedProxy(proxy); saveProxies();
+  res.json(proxy);
+});
+
+app.post('/api/proxy/manager/test-all', (req, res) => {
+  testAllManagedProxies();
+  res.json({ message: 'Testing started', total: managedProxies.length });
+});
+
+app.post('/api/proxy/manager/delete-failed', (req, res) => {
+  const before = managedProxies.length;
+  managedProxies = managedProxies.filter(p => p.status !== 'failed');
+  saveProxies();
+  res.json({ deleted: before - managedProxies.length, total: managedProxies.length });
+});
+
+app.delete('/api/proxy/manager/all', (req, res) => {
+  const count = managedProxies.length;
+  managedProxies = []; saveProxies();
+  res.json({ deleted: count });
+});
+
+app.post('/api/proxy/manager/import-from-scraper', (req, res) => {
+  let imported = 0;
+  proxyState.working.forEach(w => {
+    const [host, port] = w.proxy.split(':');
+    const exists = managedProxies.find(m => m.host === host && m.port === parseInt(port));
+    if (!exists) {
+      managedProxies.push({ id: crypto.randomBytes(4).toString('hex'), host, port: parseInt(port), type: 'HTTP', region: '—', status: 'ok', latency: w.latency, lastChecked: timeStr(), addedAt: new Date().toISOString() });
+      imported++;
+    }
+  });
+  saveProxies();
+  res.json({ imported, total: managedProxies.length });
+});
+
+app.get('/api/proxy/manager/auto-test', (req, res) => res.json(proxyAutoTestSettings));
+
+app.put('/api/proxy/manager/auto-test', (req, res) => {
+  if (req.body.enabled !== undefined) proxyAutoTestSettings.enabled = req.body.enabled;
+  if (req.body.intervalMinutes) proxyAutoTestSettings.intervalMinutes = parseInt(req.body.intervalMinutes);
+  if (req.body.autoDeleteFailed !== undefined) proxyAutoTestSettings.autoDeleteFailed = req.body.autoDeleteFailed;
+  saveProxySettings(); setupAutoTest();
+  res.json(proxyAutoTestSettings);
+});
+
 app.listen(PORT, () => {
   console.log(`[WA Gateway] Port ${PORT} | Multi-session | ${config.users.length} users`);
   const sessDir = '/opt/wa-gateway/sessions';

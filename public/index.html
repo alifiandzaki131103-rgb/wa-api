@@ -58,8 +58,11 @@
       <a onclick="showPage('settings')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="settings">
         <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
         <span>Settings</span></a>
+      <a onclick="showPage('proxy-manager')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="proxy-manager">
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+        <span>Proxy</span></a>
       <a onclick="showPage('proxy')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="proxy">
-        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         <span>Proxy Scraper</span></a>
       <a onclick="showPage('docs')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="docs">
         <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -224,6 +227,88 @@
       </div>
     </div>
 
+    <!-- Proxy Manager Page -->
+    <div id="page-proxy-manager" class="hidden p-6 space-y-6">
+      <!-- Toolbar -->
+      <div class="card rounded-2xl p-5">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+          <div class="flex items-center gap-4 flex-wrap">
+            <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+              <input type="checkbox" id="pm-autotest-enabled" onchange="updateAutoTest()" class="accent-emerald-500" />
+              <span>Auto-test every</span>
+            </label>
+            <select id="pm-autotest-interval" onchange="updateAutoTest()" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs outline-none">
+              <option value="1">1 min</option>
+              <option value="5" selected>5 min</option>
+              <option value="10">10 min</option>
+              <option value="30">30 min</option>
+            </select>
+            <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+              <input type="checkbox" id="pm-autodelete" onchange="updateAutoTest()" class="accent-emerald-500" />
+              <span>Auto-delete failed</span>
+            </label>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <span id="pm-stats" class="text-xs font-bold text-zinc-400">0 total</span>
+            <button onclick="pmDeleteFailed()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition text-zinc-400">Delete Failed</button>
+            <button onclick="pmDeleteAll()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition text-zinc-400">Delete All</button>
+            <button onclick="pmTestAll()" class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg text-[10px] font-bold transition">Test All</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-zinc-800/50">
+                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Status</th>
+                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Type</th>
+                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Region</th>
+                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Host</th>
+                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Port</th>
+                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Latency</th>
+                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Last Checked</th>
+                <th class="text-right px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pm-table-body">
+              <tr><td colspan="8" class="text-center py-8 text-xs text-zinc-500">No proxies. Click "Add Proxy" or import from scraper.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Proxy Modal -->
+    <div id="pm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="card rounded-2xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-sm font-bold">Add Proxy</h3>
+          <button onclick="document.getElementById('pm-modal').classList.add('hidden')" class="text-zinc-500 hover:text-white text-lg">&times;</button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Proxies (one per line: host:port)</label>
+            <textarea id="pm-add-input" rows="6" placeholder="82.29.223.54:7868&#10;45.38.111.179:6094&#10;45.38.111.43:5958" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-mono outline-none focus:border-emerald-500/50 resize-none"></textarea>
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Type</label>
+            <select id="pm-add-type" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none">
+              <option value="HTTP">HTTP</option>
+              <option value="HTTPS">HTTPS</option>
+              <option value="SOCKS5">SOCKS5</option>
+            </select>
+          </div>
+          <div class="flex gap-3">
+            <button onclick="pmAddProxies()" class="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition">Add Proxies</button>
+            <button onclick="pmImportFromScraper()" class="flex-1 px-4 py-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-xl text-sm font-bold transition">Import from Scraper</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- API Docs Page -->
     <div id="page-docs" class="hidden p-6 space-y-4">
       <div class="card rounded-2xl p-6 max-w-2xl space-y-3">
@@ -258,7 +343,7 @@ async function doLogin(){
 }
 function doLogout(){localStorage.removeItem('wa_token');token='';showLogin();}
 
-const titles={sessions:['Sessions','Manage WhatsApp sessions'],send:['Send Message','Send via WhatsApp'],users:['Users','Manage dashboard users'],proxy:['Proxy Scraper','Scrape & validate free proxies'],settings:['Settings','API key management'],docs:['API Docs','REST API reference']};
+const titles={sessions:['Sessions','Manage WhatsApp sessions'],send:['Send Message','Send via WhatsApp'],users:['Users','Manage dashboard users'],'proxy-manager':['Proxy','Route proxy requests through proxies'],proxy:['Proxy Scraper','Scrape & validate free proxies'],settings:['Settings','API key management'],docs:['API Docs','REST API reference']};
 function showPage(p){
   document.querySelectorAll('[id^="page-"]').forEach(el=>el.classList.add('hidden'));
   document.getElementById('page-'+p)?.classList.remove('hidden');
@@ -269,6 +354,12 @@ function showPage(p){
   if(p==='send')updateSendDropdown();
   if(p==='users')loadUsers();
   if(p==='proxy')loadProxyStatus();
+  if(p==='proxy-manager'){loadProxyManager();loadAutoTestSettings();
+    // Update header with Add Proxy button
+    document.getElementById('header-stats').innerHTML='<button onclick="document.getElementById(\'pm-modal\').classList.remove(\'hidden\')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-bold transition">Add Proxy</button>';
+  } else {
+    document.getElementById('header-stats').innerHTML='<span id="total-sessions">'+allSessions.length+'</span> sessions';
+  }
 }
 
 let allSessions=[];
@@ -467,6 +558,115 @@ function exportProxies(){
 }
 
 setInterval(()=>{if(token)loadSessions();},5000);
+
+// ============ PROXY MANAGER ============
+let pmRefreshInterval=null;
+
+async function loadProxyManager(){
+  try{
+    const r=await fetch('/api/proxy/manager/list',{headers:H()});
+    const d=await r.json();
+    const {proxies,stats}=d;
+    // Update stats
+    document.getElementById('pm-stats').innerHTML=`<span class="text-white">${stats.total}</span> total &nbsp; <span class="text-emerald-400">${stats.ok} ok</span> &nbsp; <span class="text-red-400">${stats.failed} failed</span>`;
+    // Render table
+    const tbody=document.getElementById('pm-table-body');
+    if(!proxies.length){
+      tbody.innerHTML='<tr><td colspan="8" class="text-center py-8 text-xs text-zinc-500">No proxies. Click "Add Proxy" or import from scraper.</td></tr>';
+      return;
+    }
+    tbody.innerHTML=proxies.map(p=>{
+      const statusDot=p.status==='ok'?'bg-emerald-500':p.status==='failed'?'bg-red-500':p.status==='testing'?'bg-yellow-500':'bg-zinc-500';
+      const statusText=p.status==='ok'?'text-emerald-400':p.status==='failed'?'text-red-400':p.status==='testing'?'text-yellow-400':'text-zinc-400';
+      const latencyColor=!p.latency?'text-zinc-500':p.latency<1000?'text-emerald-400':p.latency<3000?'text-yellow-400':'text-red-400';
+      const latencyText=p.latency?p.latency+'ms':'\u2014';
+      return `<tr class="border-b border-zinc-800/30 hover:bg-zinc-800/30 transition">
+        <td class="px-5 py-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full ${statusDot}"></span><span class="text-xs ${statusText}">${p.status}</span></div></td>
+        <td class="px-5 py-3 text-xs text-zinc-400">${p.type}</td>
+        <td class="px-5 py-3 text-xs text-zinc-500">${p.region}</td>
+        <td class="px-5 py-3 text-xs font-mono text-white">${p.host}</td>
+        <td class="px-5 py-3 text-xs text-zinc-300">${p.port}</td>
+        <td class="px-5 py-3 text-xs font-bold ${latencyColor}">${latencyText}</td>
+        <td class="px-5 py-3 text-xs text-zinc-500">${p.lastChecked}</td>
+        <td class="px-5 py-3 text-right">
+          <button onclick="pmTestOne('${p.id}')" class="px-2 py-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-yellow-400 transition" title="Test">&#9889;</button>
+          <button onclick="pmDeleteOne('${p.id}')" class="px-2 py-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-red-400 transition" title="Delete">&#128465;</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }catch(e){console.error('PM load error:',e);}
+}
+
+async function loadAutoTestSettings(){
+  try{
+    const r=await fetch('/api/proxy/manager/auto-test',{headers:H()});
+    const d=await r.json();
+    document.getElementById('pm-autotest-enabled').checked=d.enabled;
+    document.getElementById('pm-autotest-interval').value=d.intervalMinutes||5;
+    document.getElementById('pm-autodelete').checked=d.autoDeleteFailed;
+  }catch(e){}
+}
+
+async function updateAutoTest(){
+  const enabled=document.getElementById('pm-autotest-enabled').checked;
+  const intervalMinutes=parseInt(document.getElementById('pm-autotest-interval').value);
+  const autoDeleteFailed=document.getElementById('pm-autodelete').checked;
+  await fetch('/api/proxy/manager/auto-test',{method:'PUT',headers:H(),body:JSON.stringify({enabled,intervalMinutes,autoDeleteFailed})});
+}
+
+async function pmAddProxies(){
+  const input=document.getElementById('pm-add-input').value.trim();
+  const type=document.getElementById('pm-add-type').value;
+  if(!input){alert('Enter at least one proxy');return;}
+  const proxies=input.split('\n').map(l=>l.trim()).filter(l=>l);
+  const r=await fetch('/api/proxy/manager/add',{method:'POST',headers:H(),body:JSON.stringify({proxies,type})});
+  const d=await r.json();
+  document.getElementById('pm-add-input').value='';
+  document.getElementById('pm-modal').classList.add('hidden');
+  alert(`Added ${d.added} proxies (total: ${d.total})`);
+  loadProxyManager();
+}
+
+async function pmImportFromScraper(){
+  const r=await fetch('/api/proxy/manager/import-from-scraper',{method:'POST',headers:H()});
+  const d=await r.json();
+  document.getElementById('pm-modal').classList.add('hidden');
+  alert(`Imported ${d.imported} proxies (total: ${d.total})`);
+  loadProxyManager();
+}
+
+async function pmTestOne(id){
+  await fetch(`/api/proxy/manager/${id}/test`,{method:'POST',headers:H()});
+  loadProxyManager();
+}
+
+async function pmDeleteOne(id){
+  await fetch(`/api/proxy/manager/${id}`,{method:'DELETE',headers:H()});
+  loadProxyManager();
+}
+
+async function pmTestAll(){
+  await fetch('/api/proxy/manager/test-all',{method:'POST',headers:H()});
+  alert('Testing all proxies...');
+  // Poll refresh
+  if(pmRefreshInterval)clearInterval(pmRefreshInterval);
+  pmRefreshInterval=setInterval(loadProxyManager,2000);
+  setTimeout(()=>{if(pmRefreshInterval){clearInterval(pmRefreshInterval);pmRefreshInterval=null;}},120000);
+}
+
+async function pmDeleteFailed(){
+  if(!confirm('Delete all failed proxies?'))return;
+  const r=await fetch('/api/proxy/manager/delete-failed',{method:'POST',headers:H()});
+  const d=await r.json();
+  alert(`Deleted ${d.deleted} failed proxies`);
+  loadProxyManager();
+}
+
+async function pmDeleteAll(){
+  if(!confirm('Delete ALL proxies?'))return;
+  await fetch('/api/proxy/manager/all',{method:'DELETE',headers:H()});
+  loadProxyManager();
+}
 </script>
 </body>
 </html>
