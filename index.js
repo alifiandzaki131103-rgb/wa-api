@@ -3,6 +3,9 @@ const express = require('express');
 const qrcode = require('qrcode');
 const crypto = require('crypto');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
 
 const PORT = process.env.PORT || 2785;
 const CONFIG_FILE = '/opt/wa-gateway/config.json';
@@ -171,6 +174,143 @@ app.post('/api/:sid/send-message', async (req, res) => {
 app.post('/api/sessions/:id/messages/send-text', async (req, res) => {
   const s = sessions.get(req.params.id); if (!s || s.status !== 'ready') return res.status(503).json({ error: 'Not connected' });
   try { const m = await s.client.sendMessage(req.body.chatId, req.body.text); res.json({ success: true, response: m.id._serialized }); } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============ PROXY SCRAPER ============
+const PROXY_SOURCES = [
+  'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
+  'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt',
+  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt',
+  'https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt',
+  'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt',
+  'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-https.txt',
+  'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt',
+  'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt',
+  'https://raw.githubusercontent.com/mmpx12/proxy-list/master/https.txt',
+  'https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt',
+  'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt',
+  'https://raw.githubusercontent.com/sunny9577/proxy-scraper/master/proxies.txt',
+  'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt',
+  'https://raw.githubusercontent.com/prxchk/proxy-list/main/http.txt',
+  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/http.txt',
+  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/https.txt',
+  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/socks5.txt',
+  'https://raw.githubusercontent.com/ErcinDedeworken/proxies/main/proxies.txt',
+  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXY_LIST/master/http.txt',
+  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXY_LIST/master/https.txt',
+  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXY_LIST/master/socks5.txt',
+  'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=5000&country=all',
+  'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=5000&country=all',
+  'https://www.proxy-list.download/api/v1/get?type=http',
+  'https://www.proxy-list.download/api/v1/get?type=https',
+  'https://www.proxy-list.download/api/v1/get?type=socks5',
+];
+
+let proxyState = { status: 'idle', scraped: 0, validated: 0, total: 0, working: [], failed: 0, startedAt: null, sources: PROXY_SOURCES.length };
+
+function fetchUrl(url, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https') ? https : http;
+    const req = mod.get(url, { timeout }, res => {
+      let data = ''; res.on('data', c => data += c); res.on('end', () => resolve(data));
+    });
+    req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+  });
+}
+
+function validateProxy(host, port, timeout = 5000) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    const opts = { host, port: parseInt(port), method: 'CONNECT', path: 'www.google.com:443', timeout };
+    const req = http.request(opts);
+    req.on('connect', (res) => {
+      const latency = Date.now() - start;
+      req.destroy();
+      resolve({ host, port, latency, working: true });
+    });
+    req.on('error', () => resolve({ host, port, working: false }));
+    req.on('timeout', () => { req.destroy(); resolve({ host, port, working: false }); });
+    req.end();
+  });
+}
+
+async function scrapeProxies(concurrency = 50) {
+  proxyState = { status: 'scraping', scraped: 0, validated: 0, total: 0, working: [], failed: 0, startedAt: new Date(), sources: PROXY_SOURCES.length };
+  console.log(`[Proxy] Scraping from ${PROXY_SOURCES.length} sources...`);
+
+  const allProxies = new Set();
+  const results = await Promise.allSettled(PROXY_SOURCES.map(async url => {
+    try {
+      const data = await fetchUrl(url);
+      const lines = data.split('\n').map(l => l.trim()).filter(l => /^\d+\.\d+\.\d+\.\d+:\d+$/.test(l));
+      lines.forEach(l => allProxies.add(l));
+      return lines.length;
+    } catch(e) { return 0; }
+  }));
+
+  proxyState.scraped = allProxies.size;
+  proxyState.total = allProxies.size;
+  proxyState.status = 'validating';
+  console.log(`[Proxy] Scraped ${allProxies.size} unique proxies. Validating with ${concurrency} workers...`);
+
+  const proxies = [...allProxies];
+  const working = [];
+  let validated = 0, failed = 0;
+
+  // Process in batches
+  for (let i = 0; i < proxies.length; i += concurrency) {
+    const batch = proxies.slice(i, i + concurrency);
+    const results = await Promise.all(batch.map(p => {
+      const [host, port] = p.split(':');
+      return validateProxy(host, port);
+    }));
+    results.forEach(r => {
+      validated++;
+      if (r.working) { working.push({ proxy: `${r.host}:${r.port}`, latency: r.latency }); }
+      else { failed++; }
+    });
+    proxyState.validated = validated;
+    proxyState.failed = failed;
+    proxyState.working = working.sort((a, b) => a.latency - b.latency);
+  }
+
+  proxyState.status = 'done';
+  proxyState.working = working.sort((a, b) => a.latency - b.latency);
+  console.log(`[Proxy] Done! ${working.length} working / ${allProxies.size} total`);
+  return proxyState;
+}
+
+app.get('/api/proxy/status', (req, res) => {
+  res.json({
+    status: proxyState.status,
+    sources: proxyState.sources,
+    scraped: proxyState.scraped,
+    validated: proxyState.validated,
+    total: proxyState.total,
+    working: proxyState.working.length,
+    failed: proxyState.failed,
+    startedAt: proxyState.startedAt,
+  });
+});
+
+app.get('/api/proxy/list', (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  const type = req.query.type || 'all';
+  res.json(proxyState.working.slice(0, limit));
+});
+
+app.post('/api/proxy/scrape', (req, res) => {
+  if (proxyState.status === 'scraping' || proxyState.status === 'validating') {
+    return res.json({ message: 'Already running', status: proxyState.status });
+  }
+  const concurrency = parseInt(req.body.concurrency) || 50;
+  scrapeProxies(concurrency);
+  res.json({ message: 'Scraping started', sources: PROXY_SOURCES.length, concurrency });
+});
+
+app.post('/api/proxy/stop', (req, res) => {
+  proxyState.status = 'stopped';
+  res.json({ message: 'Stopped' });
 });
 
 app.listen(PORT, () => {
