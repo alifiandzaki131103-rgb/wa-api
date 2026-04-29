@@ -170,15 +170,18 @@
           <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Proxy Scraper</h3>
           <span id="proxy-badge" class="text-[10px] font-black px-2.5 py-1 rounded-full bg-zinc-800 text-zinc-400 uppercase">IDLE</span>
         </div>
-        <p class="text-xs text-zinc-500 mb-4">Scrape free proxies from <span id="proxy-src-count">25</span>+ sources, validate, and find working ones.</p>
-        <div class="flex gap-3 items-end">
+        <p class="text-xs text-zinc-500 mb-4">Scrape free proxies from <span id="proxy-src-count">25</span>+ sources, validate, and add to your proxy list.</p>
+        <div class="flex gap-3 items-end flex-wrap">
           <div>
             <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Workers</label>
             <input id="proxy-workers" type="number" value="50" min="10" max="200" class="w-24 px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none" />
           </div>
           <button onclick="startScrape()" id="btn-scrape" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">🔍 Start Scraping</button>
-          <button onclick="stopScrape()" class="px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-sm font-bold transition">⏹ Stop</button>
+          <button onclick="startAutoScan()" class="px-6 py-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-xl text-sm font-bold transition active:scale-[.98]">⚡ Auto Scan + Add</button>
+          <button onclick="stopScrape();stopAutoScan()" class="px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-sm font-bold transition">⏹ Stop</button>
         </div>
+        <!-- Auto Scan Status -->
+        <div id="autoscan-status" class="hidden mt-3 text-xs text-zinc-400"></div>
       </div>
 
       <!-- Stats -->
@@ -254,6 +257,16 @@
             <button onclick="pmDeleteAll()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition text-zinc-400">Delete All</button>
             <button onclick="pmTestAll()" class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg text-[10px] font-bold transition">Test All</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Region Filter -->
+      <div id="pm-region-filters" class="hidden card rounded-2xl p-4">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Filter:</span>
+          <span id="pm-proxy-count-label" class="text-xs text-zinc-400"></span>
+          <span class="text-zinc-700">|</span>
+          <div id="pm-region-tags" class="flex items-center gap-1.5 flex-wrap"></div>
         </div>
       </div>
 
@@ -561,12 +574,29 @@ setInterval(()=>{if(token)loadSessions();},5000);
 
 // ============ PROXY MANAGER ============
 let pmRefreshInterval=null;
+let pmCurrentRegion='all';
 
 async function loadProxyManager(){
   try{
-    const r=await fetch('/api/proxy/manager/list',{headers:H()});
+    const r=await fetch('/api/proxy/manager/list?region='+pmCurrentRegion,{headers:H()});
     const d=await r.json();
-    const {proxies,stats}=d;
+    const {proxies,stats,regions}=d;
+    // Render region filter tags
+    if(regions && regions.length>0){
+      document.getElementById('pm-region-filters').classList.remove('hidden');
+      const httpCount=proxies.filter(p=>p.type==='HTTP').length;
+      const socksCount=proxies.filter(p=>p.type==='SOCKS5').length;
+      document.getElementById('pm-proxy-count-label').textContent=`${proxies.length} proxies \u2014 ${httpCount} HTTP, ${socksCount} SOCKS5`;
+      const tagsEl=document.getElementById('pm-region-tags');
+      const allActive=pmCurrentRegion==='all'?'bg-emerald-600 text-white':'bg-zinc-800 text-zinc-400 hover:bg-zinc-700';
+      let tagsHtml=`<button onclick="pmFilterRegion('all')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition ${allActive}">All</button>`;
+      regions.forEach(rg=>{
+        const active=pmCurrentRegion===rg?'bg-emerald-600 text-white':'bg-zinc-800 text-zinc-400 hover:bg-zinc-700';
+        const cnt=d.proxies?d.proxies.filter(p=>p.region===rg).length:0;
+        tagsHtml+=`<button onclick="pmFilterRegion('${rg}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition ${active}">${rg} <span class='opacity-60'>${cnt}</span></button>`;
+      });
+      tagsEl.innerHTML=tagsHtml;
+    } else { document.getElementById('pm-region-filters').classList.add('hidden'); }
     // Update stats
     document.getElementById('pm-stats').innerHTML=`<span class="text-white">${stats.total}</span> total &nbsp; <span class="text-emerald-400">${stats.ok} ok</span> &nbsp; <span class="text-red-400">${stats.failed} failed</span>`;
     // Render table
@@ -666,6 +696,43 @@ async function pmDeleteAll(){
   if(!confirm('Delete ALL proxies?'))return;
   await fetch('/api/proxy/manager/all',{method:'DELETE',headers:H()});
   loadProxyManager();
+}
+
+function pmFilterRegion(region){
+  pmCurrentRegion=region;
+  loadProxyManager();
+}
+
+// ============ AUTO SCAN + ADD ============
+let autoScanInterval=null;
+async function startAutoScan(){
+  const w=document.getElementById('proxy-workers').value||50;
+  await fetch('/api/proxy/auto-scan',{method:'POST',headers:H(),body:JSON.stringify({concurrency:parseInt(w)})});
+  document.getElementById('autoscan-status').classList.remove('hidden');
+  if(autoScanInterval)clearInterval(autoScanInterval);
+  autoScanInterval=setInterval(pollAutoScan,2000);
+  setTimeout(pollAutoScan,500);
+}
+async function stopAutoScan(){
+  await fetch('/api/proxy/auto-scan/stop',{method:'POST',headers:H()});
+  if(autoScanInterval){clearInterval(autoScanInterval);autoScanInterval=null;}
+  document.getElementById('autoscan-status').classList.add('hidden');
+}
+async function pollAutoScan(){
+  try{
+    const r=await fetch('/api/proxy/auto-scan/status',{headers:H()});
+    const d=await r.json();
+    const el=document.getElementById('autoscan-status');
+    if(d.status==='running'){
+      el.innerHTML=`\u26a1 Auto Scan: Validated <b>${d.validated}</b>/${d.total} | Added <b class="text-emerald-400">${d.added}</b> | Failed ${d.failed}`;
+    } else if(d.status==='done'){
+      el.innerHTML=`\u2705 Auto Scan complete! Added <b class="text-emerald-400">${d.added}</b> proxies to manager`;
+      if(autoScanInterval){clearInterval(autoScanInterval);autoScanInterval=null;}
+    } else if(d.status==='stopped'){
+      el.innerHTML=`\u23f9 Auto Scan stopped. Added <b>${d.added}</b> proxies`;
+      if(autoScanInterval){clearInterval(autoScanInterval);autoScanInterval=null;}
+    }
+  }catch(e){}
 }
 </script>
 </body>

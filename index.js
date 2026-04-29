@@ -333,6 +333,41 @@ loadProxySettings();
 
 function timeStr() { const d = new Date(); return d.toTimeString().split(' ')[0].slice(0,8); }
 
+// IP Geolocation lookup (free API, batch-friendly)
+async function lookupRegion(ip) {
+  try {
+    const data = await fetchUrl(`http://ip-api.com/json/${ip}?fields=countryCode`);
+    const j = JSON.parse(data);
+    return j.countryCode || '—';
+  } catch(e) { return '—'; }
+}
+
+// Batch region lookup with rate limiting (ip-api allows 45/min)
+async function lookupRegionsBatch(proxies) {
+  const needLookup = proxies.filter(p => !p.region || p.region === '—');
+  for (let i = 0; i < needLookup.length; i += 40) {
+    const batch = needLookup.slice(i, i + 40);
+    // ip-api.com batch endpoint
+    try {
+      const body = JSON.stringify(batch.map(p => ({ query: p.host, fields: 'countryCode,query' })));
+      const data = await new Promise((resolve, reject) => {
+        const req = http.request({ hostname: 'ip-api.com', path: '/batch', method: 'POST', headers: { 'Content-Type': 'application/json' }, timeout: 10000 }, res => {
+          let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d));
+        });
+        req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+        req.write(body); req.end();
+      });
+      const results = JSON.parse(data);
+      results.forEach(r => {
+        const proxy = batch.find(p => p.host === r.query);
+        if (proxy && r.countryCode) proxy.region = r.countryCode;
+      });
+    } catch(e) { console.error('[Proxy] Region batch error:', e.message); }
+    // Rate limit: wait 1.5s between batches
+    if (i + 40 < needLookup.length) await new Promise(r => setTimeout(r, 1500));
+  }
+}
+
 async function testManagedProxy(proxy) {
   proxy.status = 'testing';
   const result = await validateProxy(proxy.host, parseInt(proxy.port));
@@ -365,8 +400,12 @@ function setupAutoTest() {
 setupAutoTest();
 
 app.get('/api/proxy/manager/list', (req, res) => {
+  let filtered = managedProxies;
+  const region = req.query.region;
+  if (region && region !== 'all') filtered = filtered.filter(p => p.region === region);
   const stats = { total: managedProxies.length, ok: managedProxies.filter(p=>p.status==='ok').length, failed: managedProxies.filter(p=>p.status==='failed').length };
-  res.json({ proxies: managedProxies, stats });
+  const regions = [...new Set(managedProxies.map(p => p.region).filter(r => r && r !== '—'))].sort();
+  res.json({ proxies: filtered, stats, regions });
 });
 
 app.post('/api/proxy/manager/add', (req, res) => {
@@ -392,6 +431,8 @@ app.post('/api/proxy/manager/add', (req, res) => {
   }
   saveProxies();
   res.json({ added: added.length, total: managedProxies.length });
+  // Lookup regions in background
+  if (added.length > 0) { lookupRegionsBatch(added).then(() => saveProxies()); }
 });
 
 app.delete('/api/proxy/manager/:id', (req, res) => {
@@ -426,19 +467,79 @@ app.delete('/api/proxy/manager/all', (req, res) => {
   res.json({ deleted: count });
 });
 
-app.post('/api/proxy/manager/import-from-scraper', (req, res) => {
+app.post('/api/proxy/manager/import-from-scraper', async (req, res) => {
   let imported = 0;
+  const newProxies = [];
   proxyState.working.forEach(w => {
     const [host, port] = w.proxy.split(':');
     const exists = managedProxies.find(m => m.host === host && m.port === parseInt(port));
     if (!exists) {
-      managedProxies.push({ id: crypto.randomBytes(4).toString('hex'), host, port: parseInt(port), type: 'HTTP', region: '—', status: 'ok', latency: w.latency, lastChecked: timeStr(), addedAt: new Date().toISOString() });
-      imported++;
+      const p = { id: crypto.randomBytes(4).toString('hex'), host, port: parseInt(port), type: 'HTTP', region: '—', status: 'ok', latency: w.latency, lastChecked: timeStr(), addedAt: new Date().toISOString() };
+      managedProxies.push(p); newProxies.push(p); imported++;
     }
   });
   saveProxies();
   res.json({ imported, total: managedProxies.length });
+  // Lookup regions in background
+  if (newProxies.length > 0) { lookupRegionsBatch(newProxies).then(() => saveProxies()); }
 });
+
+// Auto Scan + Add: scrape → validate → auto-add working to manager + region lookup
+let autoScanState = { status: 'idle', scraped: 0, validated: 0, total: 0, added: 0, failed: 0 };
+
+app.post('/api/proxy/auto-scan', (req, res) => {
+  if (autoScanState.status === 'running') return res.json({ message: 'Already running', ...autoScanState });
+  const concurrency = parseInt(req.body.concurrency) || 50;
+  autoScanState = { status: 'running', scraped: 0, validated: 0, total: 0, added: 0, failed: 0, startedAt: new Date() };
+  runAutoScan(concurrency);
+  res.json({ message: 'Auto Scan started', concurrency });
+});
+
+app.get('/api/proxy/auto-scan/status', (req, res) => res.json(autoScanState));
+
+app.post('/api/proxy/auto-scan/stop', (req, res) => {
+  autoScanState.status = 'stopped';
+  res.json({ message: 'Stopped' });
+});
+
+async function runAutoScan(concurrency) {
+  console.log('[AutoScan] Starting...');
+  // Phase 1: Scrape
+  const allProxies = new Set();
+  await Promise.allSettled(PROXY_SOURCES.map(async url => {
+    try {
+      const data = await fetchUrl(url);
+      data.split('\n').map(l => l.trim()).filter(l => /^\d+\.\d+\.\d+\.\d+:\d+$/.test(l)).forEach(l => allProxies.add(l));
+    } catch(e) {}
+  }));
+  autoScanState.scraped = allProxies.size;
+  autoScanState.total = allProxies.size;
+  console.log(`[AutoScan] Scraped ${allProxies.size}. Validating...`);
+
+  // Phase 2: Validate + auto-add
+  const proxies = [...allProxies];
+  const newProxies = [];
+  for (let i = 0; i < proxies.length; i += concurrency) {
+    if (autoScanState.status === 'stopped') break;
+    const batch = proxies.slice(i, i + concurrency);
+    const results = await Promise.all(batch.map(p => { const [h, pt] = p.split(':'); return validateProxy(h, pt); }));
+    results.forEach(r => {
+      autoScanState.validated++;
+      if (r.working) {
+        const exists = managedProxies.find(m => m.host === r.host && m.port === parseInt(r.port));
+        if (!exists) {
+          const p = { id: crypto.randomBytes(4).toString('hex'), host: r.host, port: parseInt(r.port), type: 'HTTP', region: '—', status: 'ok', latency: r.latency, lastChecked: timeStr(), addedAt: new Date().toISOString() };
+          managedProxies.push(p); newProxies.push(p); autoScanState.added++;
+        }
+      } else { autoScanState.failed++; }
+    });
+  }
+  saveProxies();
+  autoScanState.status = 'done';
+  console.log(`[AutoScan] Done! Added ${autoScanState.added} proxies`);
+  // Phase 3: Region lookup in background
+  if (newProxies.length > 0) { lookupRegionsBatch(newProxies).then(() => saveProxies()); }
+}
 
 app.get('/api/proxy/manager/auto-test', (req, res) => res.json(proxyAutoTestSettings));
 
