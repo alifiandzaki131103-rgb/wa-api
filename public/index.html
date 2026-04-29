@@ -58,12 +58,6 @@
       <a onclick="showPage('settings')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="settings">
         <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
         <span>Settings</span></a>
-      <a onclick="showPage('proxy-manager')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="proxy-manager">
-        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
-        <span>Proxy</span></a>
-      <a onclick="showPage('proxy')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="proxy">
-        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <span>Proxy Scraper</span></a>
       <a onclick="showPage('docs')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="docs">
         <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         <span>API Docs</span></a>
@@ -87,7 +81,6 @@
 
     <!-- Sessions Page -->
     <div id="page-sessions" class="p-6 space-y-6">
-      <!-- Add Session -->
       <div class="card rounded-2xl p-5">
         <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Create New Session</h3>
         <div class="flex gap-3">
@@ -95,8 +88,6 @@
           <button onclick="addSession()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">+ Create</button>
         </div>
       </div>
-
-      <!-- Session List -->
       <div id="session-list" class="space-y-4"></div>
     </div>
 
@@ -130,7 +121,6 @@
           </select>
           <button onclick="addUser()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">+ Add</button>
         </div>
-        <div id="user-add-result" class="hidden mt-3 card rounded-xl p-3 text-xs"></div>
       </div>
       <div class="card rounded-2xl p-5">
         <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">User List</h3>
@@ -158,166 +148,6 @@
           <div><input id="new-apikey" placeholder="Custom key (min 8 chars)" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-mono outline-none focus:border-emerald-500/50" /></div>
           <button onclick="saveKey()" class="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition">Save Custom Key</button>
           <div id="key-result" class="hidden card rounded-xl p-3 text-xs"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Proxy Scraper Page -->
-    <div id="page-proxy" class="hidden p-6 space-y-6">
-      <!-- Controls -->
-      <div class="card rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Proxy Scraper</h3>
-          <span id="proxy-badge" class="text-[10px] font-black px-2.5 py-1 rounded-full bg-zinc-800 text-zinc-400 uppercase">IDLE</span>
-        </div>
-        <p class="text-xs text-zinc-500 mb-4">Scrape free proxies from <span id="proxy-src-count">25</span>+ sources, validate, and add to your proxy list.</p>
-        <div class="flex gap-3 items-end flex-wrap">
-          <div>
-            <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Workers</label>
-            <input id="proxy-workers" type="number" value="50" min="10" max="200" class="w-24 px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none" />
-          </div>
-          <button onclick="startScrape()" id="btn-scrape" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">🔍 Start Scraping</button>
-          <button onclick="startAutoScan()" class="px-6 py-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-xl text-sm font-bold transition active:scale-[.98]">⚡ Auto Scan + Add</button>
-          <button onclick="stopScrape();stopAutoScan()" class="px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-sm font-bold transition">⏹ Stop</button>
-        </div>
-        <!-- Auto Scan Status -->
-        <div id="autoscan-status" class="hidden mt-3 text-xs text-zinc-400"></div>
-      </div>
-
-      <!-- Stats -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="card rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-bold text-zinc-500 uppercase">Sources</p>
-          <p id="ps-sources" class="text-xl font-black mt-1">0</p>
-        </div>
-        <div class="card rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-bold text-zinc-500 uppercase">Scraped</p>
-          <p id="ps-scraped" class="text-xl font-black mt-1">0</p>
-        </div>
-        <div class="card rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-bold text-zinc-500 uppercase">Validated</p>
-          <p id="ps-validated" class="text-xl font-black mt-1 text-blue-400">0</p>
-        </div>
-        <div class="card rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-bold text-zinc-500 uppercase">Working</p>
-          <p id="ps-working" class="text-xl font-black mt-1 text-emerald-400">0</p>
-        </div>
-      </div>
-
-      <!-- Progress -->
-      <div id="proxy-progress" class="hidden card rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-bold text-zinc-400">Progress</span>
-          <span id="proxy-pct" class="text-xs font-mono text-zinc-500">0%</span>
-        </div>
-        <div class="w-full bg-zinc-800 rounded-full h-2">
-          <div id="proxy-bar" class="bg-emerald-500 h-2 rounded-full transition-all" style="width:0%"></div>
-        </div>
-      </div>
-
-      <!-- Results -->
-      <div class="card rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Working Proxies</h3>
-          <div class="flex gap-2">
-            <button onclick="copyProxies()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition">📋 Copy All</button>
-            <button onclick="exportProxies()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition">💾 Export</button>
-          </div>
-        </div>
-        <div id="proxy-list" class="max-h-96 overflow-y-auto space-y-1">
-          <p class="text-xs text-zinc-500 text-center py-4">Click "Start Scraping" to find proxies</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Proxy Manager Page -->
-    <div id="page-proxy-manager" class="hidden p-6 space-y-6">
-      <!-- Toolbar -->
-      <div class="card rounded-2xl p-5">
-        <div class="flex items-center justify-between flex-wrap gap-4">
-          <div class="flex items-center gap-4 flex-wrap">
-            <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-              <input type="checkbox" id="pm-autotest-enabled" onchange="updateAutoTest()" class="accent-emerald-500" />
-              <span>Auto-test every</span>
-            </label>
-            <select id="pm-autotest-interval" onchange="updateAutoTest()" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs outline-none">
-              <option value="1">1 min</option>
-              <option value="5" selected>5 min</option>
-              <option value="10">10 min</option>
-              <option value="30">30 min</option>
-            </select>
-            <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-              <input type="checkbox" id="pm-autodelete" onchange="updateAutoTest()" class="accent-emerald-500" />
-              <span>Auto-delete failed</span>
-            </label>
-          </div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <span id="pm-stats" class="text-xs font-bold text-zinc-400">0 total</span>
-            <button onclick="pmDeleteFailed()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition text-zinc-400">Delete Failed</button>
-            <button onclick="pmDeleteAll()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition text-zinc-400">Delete All</button>
-            <button onclick="pmTestAll()" class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg text-[10px] font-bold transition">Test All</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Region Filter -->
-      <div id="pm-region-filters" class="hidden card rounded-2xl p-4">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Filter:</span>
-          <span id="pm-proxy-count-label" class="text-xs text-zinc-400"></span>
-          <span class="text-zinc-700">|</span>
-          <div id="pm-region-tags" class="flex items-center gap-1.5 flex-wrap"></div>
-        </div>
-      </div>
-
-      <!-- Table -->
-      <div class="card rounded-2xl overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-zinc-800/50">
-                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Status</th>
-                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Type</th>
-                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Region</th>
-                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Host</th>
-                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Port</th>
-                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Latency</th>
-                <th class="text-left px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Last Checked</th>
-                <th class="text-right px-5 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="pm-table-body">
-              <tr><td colspan="8" class="text-center py-8 text-xs text-zinc-500">No proxies. Click "Add Proxy" or import from scraper.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add Proxy Modal -->
-    <div id="pm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div class="card rounded-2xl p-6 w-full max-w-md mx-4">
-        <div class="flex items-center justify-between mb-5">
-          <h3 class="text-sm font-bold">Add Proxy</h3>
-          <button onclick="document.getElementById('pm-modal').classList.add('hidden')" class="text-zinc-500 hover:text-white text-lg">&times;</button>
-        </div>
-        <div class="space-y-4">
-          <div>
-            <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Proxies (one per line: host:port)</label>
-            <textarea id="pm-add-input" rows="6" placeholder="82.29.223.54:7868&#10;45.38.111.179:6094&#10;45.38.111.43:5958" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-mono outline-none focus:border-emerald-500/50 resize-none"></textarea>
-          </div>
-          <div>
-            <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Type</label>
-            <select id="pm-add-type" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none">
-              <option value="HTTP">HTTP</option>
-              <option value="HTTPS">HTTPS</option>
-              <option value="SOCKS5">SOCKS5</option>
-            </select>
-          </div>
-          <div class="flex gap-3">
-            <button onclick="pmAddProxies()" class="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition">Add Proxies</button>
-            <button onclick="pmImportFromScraper()" class="flex-1 px-4 py-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-xl text-sm font-bold transition">Import from Scraper</button>
-          </div>
         </div>
       </div>
     </div>
@@ -356,7 +186,7 @@ async function doLogin(){
 }
 function doLogout(){localStorage.removeItem('wa_token');token='';showLogin();}
 
-const titles={sessions:['Sessions','Manage WhatsApp sessions'],send:['Send Message','Send via WhatsApp'],users:['Users','Manage dashboard users'],'proxy-manager':['Proxy','Route proxy requests through proxies'],proxy:['Proxy Scraper','Scrape & validate free proxies'],settings:['Settings','API key management'],docs:['API Docs','REST API reference']};
+const titles={sessions:['Sessions','Manage WhatsApp sessions'],send:['Send Message','Send via WhatsApp'],users:['Users','Manage dashboard users'],settings:['Settings','API key management'],docs:['API Docs','REST API reference']};
 function showPage(p){
   document.querySelectorAll('[id^="page-"]').forEach(el=>el.classList.add('hidden'));
   document.getElementById('page-'+p)?.classList.remove('hidden');
@@ -366,22 +196,13 @@ function showPage(p){
   if(p==='settings')loadSettings();
   if(p==='send')updateSendDropdown();
   if(p==='users')loadUsers();
-  if(p==='proxy')loadProxyStatus();
-  if(p==='proxy-manager'){loadProxyManager();loadAutoTestSettings();
-    // Update header with Add Proxy button
-    document.getElementById('header-stats').innerHTML='<button onclick="document.getElementById(\'pm-modal\').classList.remove(\'hidden\')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-bold transition">Add Proxy</button>';
-  } else {
-    document.getElementById('header-stats').innerHTML='<span id="total-sessions">'+allSessions.length+'</span> sessions';
-  }
 }
 
 let allSessions=[];
 async function loadSessions(){
-  try{await loadManagedProxiesForSessions();
-    const r=await fetch('/api/sessions',{headers:H()});if(r.status===401){doLogout();return;}
+  try{const r=await fetch('/api/sessions',{headers:H()});if(r.status===401){doLogout();return;}
     allSessions=await r.json();document.getElementById('total-sessions').textContent=allSessions.length;
     renderSessions();
-    // Load QR for qr_ready sessions
     for(const s of allSessions){
       if(s.status==='qr_ready'){
         const qr=await fetch('/api/sessions/'+s.id+'/qr',{headers:H()});
@@ -395,17 +216,9 @@ async function loadSessions(){
 function renderSessions(){
   const el=document.getElementById('session-list');
   if(!allSessions.length){el.innerHTML='<div class="card rounded-2xl p-8 text-center text-zinc-500 text-sm">No sessions. Create one above.</div>';return;}
-  // Build proxy options from managed proxies
-  const proxyOpts = (managedProxies||[]).filter(p=>p.status==='ok').map(p=>`${p.host}:${p.port}`);
   el.innerHTML=allSessions.map(s=>{
-    const colors={ready:'emerald',qr_ready:'yellow',initializing:'blue',authenticated:'blue',disconnected:'red',error:'red',not_found:'zinc',stopped:'zinc'};
+    const colors={ready:'emerald',qr_ready:'yellow',initializing:'blue',authenticated:'blue',disconnected:'red',error:'red',stopped:'zinc',not_found:'zinc'};
     const c=colors[s.status]||'red';
-    const proxyLabel = s.proxy ? `🌐 ${s.proxy}` : '🔗 Direct';
-    const proxyColor = s.proxy ? 'text-blue-400' : 'text-zinc-500';
-    const rotateLabel = s.autoRotate ? `🔄 ${(s.rotateIntervalMs||60000)/1000}s` : '';
-    // Build proxy select options
-    let proxySelectOpts = `<option value="" ${!s.proxy?'selected':''}>Direct (no proxy)</option>`;
-    proxyOpts.forEach(p => { proxySelectOpts += `<option value="${p}" ${s.proxy===p?'selected':''}>${p}</option>`; });
     return `<div class="card rounded-2xl p-5 ${s.status==='ready'?'glow-green':s.status==='qr_ready'?'glow-yellow':''}">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
@@ -417,29 +230,9 @@ function renderSessions(){
             <p class="text-[10px] text-zinc-500">${s.phone?'+'+s.phone:'No phone connected'}</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] font-bold ${proxyColor}">${proxyLabel}</span>
-          ${rotateLabel?`<span class="text-[10px] font-bold text-yellow-400">${rotateLabel}</span>`:''}
-          <span class="text-[10px] font-black px-2.5 py-1 rounded-full bg-${c}-500/10 text-${c}-400 uppercase">${s.status.replace('_',' ')}</span>
-        </div>
+        <span class="text-[10px] font-black px-2.5 py-1 rounded-full bg-${c}-500/10 text-${c}-400 uppercase">${s.status.replace('_',' ')}</span>
       </div>
       ${s._qr?`<div class="bg-white p-3 rounded-xl inline-block mb-4"><img src="data:image/png;base64,${s._qr}" class="w-48 h-48"/></div><p class="text-[10px] text-zinc-500 mb-4">Scan with WhatsApp → Linked Devices</p>`:''}
-      <!-- Proxy Controls -->
-      <div class="flex items-center gap-2 mb-3 flex-wrap">
-        <select onchange="setSessionProxy('${s.id}',this)" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-[11px] outline-none min-w-[180px]">
-          ${proxySelectOpts}
-        </select>
-        <label class="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
-          <input type="checkbox" ${s.autoRotate?'checked':''} onchange="toggleAutoRotate('${s.id}',this.checked)" class="accent-emerald-500" />
-          Auto-rotate
-        </label>
-        <select onchange="setRotateInterval('${s.id}',this.value)" class="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] outline-none">
-          <option value="60000" ${(s.rotateIntervalMs||60000)===60000?'selected':''}>1 min</option>
-          <option value="180000" ${s.rotateIntervalMs===180000?'selected':''}>3 min</option>
-          <option value="300000" ${s.rotateIntervalMs===300000?'selected':''}>5 min</option>
-          <option value="600000" ${s.rotateIntervalMs===600000?'selected':''}>10 min</option>
-        </select>
-      </div>
       <div class="flex gap-2">
         <button onclick="startSess('${s.id}')" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg text-xs font-bold transition">▶ Start</button>
         <button onclick="stopSess('${s.id}')" class="px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 rounded-lg text-xs font-bold transition">⏸ Stop</button>
@@ -455,27 +248,6 @@ async function addSession(){
   await fetch('/api/sessions',{method:'POST',headers:H(),body:JSON.stringify({id})});
   document.getElementById('new-session-id').value='';
   setTimeout(loadSessions,2000);
-}
-let managedProxies=[];
-async function loadManagedProxiesForSessions(){
-  try{const r=await fetch('/api/proxy/manager/list',{headers:H()});const d=await r.json();managedProxies=d.proxies||[];}catch(e){managedProxies=[];}
-}
-async function setSessionProxy(id,sel){
-  const proxy=sel.value||null;
-  await fetch('/api/sessions/'+id+'/proxy',{method:'PUT',headers:H(),body:JSON.stringify({proxy})});
-  // Update local state immediately so UI doesn't flicker back
-  const s=allSessions.find(x=>x.id===id);
-  if(s) s.proxy=proxy;
-  renderSessions();
-  setTimeout(loadSessions,5000);
-}
-async function toggleAutoRotate(id,enabled){
-  const s=allSessions.find(x=>x.id===id);
-  await fetch('/api/sessions/'+id+'/proxy',{method:'PUT',headers:H(),body:JSON.stringify({proxy:s?.proxy||null,autoRotate:enabled,rotateIntervalMs:s?.rotateIntervalMs||60000})});
-}
-async function setRotateInterval(id,ms){
-  const s=allSessions.find(x=>x.id===id);
-  await fetch('/api/sessions/'+id+'/proxy',{method:'PUT',headers:H(),body:JSON.stringify({proxy:s?.proxy||null,autoRotate:s?.autoRotate||false,rotateIntervalMs:parseInt(ms)})});
 }
 async function startSess(id){await fetch('/api/sessions',{method:'POST',headers:H(),body:JSON.stringify({id})});setTimeout(loadSessions,3000);}
 async function stopSess(id){await fetch('/api/sessions/'+id+'/stop',{method:'POST',headers:H()});setTimeout(loadSessions,1000);}
@@ -518,272 +290,33 @@ async function saveKey(){
   const el=document.getElementById('key-result');el.classList.remove('hidden');el.innerHTML='<span class="text-emerald-400">✅ Saved!</span>';
 }
 
-// Users
 async function loadUsers(){
   try{const r=await fetch('/api/users',{headers:H()});const users=await r.json();
-    const el=document.getElementById('user-list');
-    el.innerHTML=users.map(u=>`<div class="flex items-center justify-between bg-zinc-900/50 rounded-xl px-4 py-3">
+    document.getElementById('user-list').innerHTML=users.map(u=>`<div class="flex items-center justify-between bg-zinc-900/50 rounded-xl px-4 py-3">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-${u.role==='superadmin'?'yellow':'blue'}-500/10 rounded-lg flex items-center justify-center">
-          <span class="text-xs">${u.role==='superadmin'?'👑':'👤'}</span>
-        </div>
-        <div>
-          <p class="text-sm font-bold">${u.username}</p>
-          <p class="text-[10px] text-zinc-500">${u.role} • ${new Date(u.createdAt).toLocaleDateString()}</p>
-        </div>
+        <div class="w-8 h-8 bg-zinc-800 rounded-lg flex items-center justify-center text-xs font-bold">${u.username[0].toUpperCase()}</div>
+        <div><p class="text-sm font-bold">${u.username}</p><p class="text-[10px] text-zinc-500">${u.role} · ${new Date(u.createdAt).toLocaleDateString()}</p></div>
       </div>
       <div class="flex gap-2">
-        <button onclick="editUser('${u.id}','${u.username}')" class="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold">✏️</button>
-        <button onclick="deleteUser('${u.id}','${u.username}')" class="px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-[10px] font-bold">🗑</button>
+        <button onclick="deleteUser('${u.id}')" class="px-2 py-1 hover:bg-red-500/10 rounded text-zinc-500 hover:text-red-400 text-xs">🗑</button>
       </div>
     </div>`).join('');
   }catch(e){}
 }
 async function addUser(){
   const u=document.getElementById('new-user').value.trim(),p=document.getElementById('new-pass').value,r=document.getElementById('new-role').value;
-  const el=document.getElementById('user-add-result');el.classList.remove('hidden');
-  try{const res=await fetch('/api/users',{method:'POST',headers:H(),body:JSON.stringify({username:u,password:p,role:r})});const d=await res.json();
-    if(!res.ok){el.innerHTML=`<span class="text-red-400">❌ ${d.error}</span>`;return;}
-    el.innerHTML=`<span class="text-emerald-400">✅ User ${d.username} created!</span>`;
-    document.getElementById('new-user').value='';document.getElementById('new-pass').value='';
-    loadUsers();
-  }catch(e){el.innerHTML=`<span class="text-red-400">❌ ${e.message}</span>`;}
+  if(!u||!p)return;
+  const res=await fetch('/api/users',{method:'POST',headers:H(),body:JSON.stringify({username:u,password:p,role:r})});
+  const d=await res.json();
+  if(!res.ok)alert(d.error); loadUsers();
 }
-async function editUser(id,name){
-  const newPass=prompt('New password for '+name+' (leave empty to skip):');
-  if(newPass===null)return;
-  const newRole=prompt('Role (admin/superadmin):','admin');
-  const body={}; if(newPass)body.password=newPass; if(newRole)body.role=newRole;
-  await fetch('/api/users/'+id,{method:'PUT',headers:H(),body:JSON.stringify(body)});
-  loadUsers();
-}
-async function deleteUser(id,name){
-  if(!confirm('Delete user '+name+'?'))return;
+async function deleteUser(id){
+  if(!confirm('Delete user?'))return;
   const r=await fetch('/api/users/'+id,{method:'DELETE',headers:H()});const d=await r.json();
   if(!r.ok)alert(d.error); loadUsers();
 }
 
-// Proxy Scraper
-let proxyInterval=null;
-async function loadProxyStatus(){
-  try{const r=await fetch('/api/proxy/status',{headers:H()});const d=await r.json();
-    document.getElementById('ps-sources').textContent=d.sources||0;
-    document.getElementById('ps-scraped').textContent=d.scraped||0;
-    document.getElementById('ps-validated').textContent=d.validated||0;
-    document.getElementById('ps-working').textContent=d.working||0;
-    const badge=document.getElementById('proxy-badge');
-    const colors={idle:'bg-zinc-800 text-zinc-400',scraping:'bg-yellow-500/10 text-yellow-400',validating:'bg-blue-500/10 text-blue-400',done:'bg-emerald-500/10 text-emerald-400',stopped:'bg-red-500/10 text-red-400'};
-    badge.textContent=d.status.toUpperCase();
-    badge.className='text-[10px] font-black px-2.5 py-1 rounded-full uppercase '+(colors[d.status]||colors.idle);
-    const prog=document.getElementById('proxy-progress');
-    if(d.status==='validating'||d.status==='scraping'){prog.classList.remove('hidden');const pct=d.total?Math.round(d.validated/d.total*100):0;document.getElementById('proxy-pct').textContent=pct+'%';document.getElementById('proxy-bar').style.width=pct+'%';}
-    else if(d.status==='done'){prog.classList.remove('hidden');document.getElementById('proxy-pct').textContent='100%';document.getElementById('proxy-bar').style.width='100%';}
-    else{prog.classList.add('hidden');}
-    if(d.status==='done'||d.working>0)loadProxyList();
-  }catch(e){}
-}
-async function loadProxyList(){
-  try{const r=await fetch('/api/proxy/list?limit=500',{headers:H()});const list=await r.json();
-    const el=document.getElementById('proxy-list');
-    if(!list.length){el.innerHTML='<p class="text-xs text-zinc-500 text-center py-4">No working proxies found yet</p>';return;}
-    el.innerHTML=list.map((p,i)=>`<div class="flex items-center justify-between bg-zinc-900/50 rounded-lg px-3 py-2">
-      <div class="flex items-center gap-3">
-        <span class="text-[10px] text-zinc-600 w-6">${i+1}</span>
-        <span class="text-xs font-mono text-white">${p.proxy}</span>
-      </div>
-      <span class="text-[10px] font-bold ${p.latency<1000?'text-emerald-400':p.latency<3000?'text-yellow-400':'text-red-400'}">${p.latency}ms</span>
-    </div>`).join('');
-  }catch(e){}
-}
-async function startScrape(){
-  const w=document.getElementById('proxy-workers').value||50;
-  await fetch('/api/proxy/scrape',{method:'POST',headers:H(),body:JSON.stringify({concurrency:parseInt(w)})});
-  if(proxyInterval)clearInterval(proxyInterval);
-  proxyInterval=setInterval(loadProxyStatus,2000);
-  setTimeout(loadProxyStatus,500);
-}
-async function stopScrape(){
-  await fetch('/api/proxy/stop',{method:'POST',headers:H()});
-  if(proxyInterval){clearInterval(proxyInterval);proxyInterval=null;}
-  loadProxyStatus();
-}
-function copyProxies(){
-  const list=document.querySelectorAll('#proxy-list .font-mono');
-  const text=[...list].map(el=>el.textContent).join('\n');
-  navigator.clipboard.writeText(text);
-  alert('Copied '+list.length+' proxies!');
-}
-function exportProxies(){
-  const list=document.querySelectorAll('#proxy-list .font-mono');
-  const text=[...list].map(el=>el.textContent).join('\n');
-  const blob=new Blob([text],{type:'text/plain'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='proxies-'+new Date().toISOString().slice(0,10)+'.txt';a.click();
-}
-
 setInterval(()=>{if(token)loadSessions();},5000);
-
-// ============ PROXY MANAGER ============
-let pmRefreshInterval=null;
-let pmCurrentRegion='all';
-
-async function loadProxyManager(){
-  try{
-    const r=await fetch('/api/proxy/manager/list?region='+pmCurrentRegion,{headers:H()});
-    const d=await r.json();
-    const {proxies,stats,regions}=d;
-    // Render region filter tags
-    if(regions && regions.length>0){
-      document.getElementById('pm-region-filters').classList.remove('hidden');
-      const httpCount=proxies.filter(p=>p.type==='HTTP').length;
-      const socksCount=proxies.filter(p=>p.type==='SOCKS5').length;
-      document.getElementById('pm-proxy-count-label').textContent=`${proxies.length} proxies \u2014 ${httpCount} HTTP, ${socksCount} SOCKS5`;
-      const tagsEl=document.getElementById('pm-region-tags');
-      const allActive=pmCurrentRegion==='all'?'bg-emerald-600 text-white':'bg-zinc-800 text-zinc-400 hover:bg-zinc-700';
-      let tagsHtml=`<button onclick="pmFilterRegion('all')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition ${allActive}">All</button>`;
-      regions.forEach(rg=>{
-        const active=pmCurrentRegion===rg?'bg-emerald-600 text-white':'bg-zinc-800 text-zinc-400 hover:bg-zinc-700';
-        const cnt=d.proxies?d.proxies.filter(p=>p.region===rg).length:0;
-        tagsHtml+=`<button onclick="pmFilterRegion('${rg}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition ${active}">${rg} <span class='opacity-60'>${cnt}</span></button>`;
-      });
-      tagsEl.innerHTML=tagsHtml;
-    } else { document.getElementById('pm-region-filters').classList.add('hidden'); }
-    // Update stats
-    document.getElementById('pm-stats').innerHTML=`<span class="text-white">${stats.total}</span> total &nbsp; <span class="text-emerald-400">${stats.ok} ok</span> &nbsp; <span class="text-red-400">${stats.failed} failed</span>`;
-    // Render table
-    const tbody=document.getElementById('pm-table-body');
-    if(!proxies.length){
-      tbody.innerHTML='<tr><td colspan="8" class="text-center py-8 text-xs text-zinc-500">No proxies. Click "Add Proxy" or import from scraper.</td></tr>';
-      return;
-    }
-    tbody.innerHTML=proxies.map(p=>{
-      const statusDot=p.status==='ok'?'bg-emerald-500':p.status==='failed'?'bg-red-500':p.status==='testing'?'bg-yellow-500':'bg-zinc-500';
-      const statusText=p.status==='ok'?'text-emerald-400':p.status==='failed'?'text-red-400':p.status==='testing'?'text-yellow-400':'text-zinc-400';
-      const latencyColor=!p.latency?'text-zinc-500':p.latency<1000?'text-emerald-400':p.latency<3000?'text-yellow-400':'text-red-400';
-      const latencyText=p.latency?p.latency+'ms':'\u2014';
-      return `<tr class="border-b border-zinc-800/30 hover:bg-zinc-800/30 transition">
-        <td class="px-5 py-3"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full ${statusDot}"></span><span class="text-xs ${statusText}">${p.status}</span></div></td>
-        <td class="px-5 py-3 text-xs text-zinc-400">${p.type}</td>
-        <td class="px-5 py-3 text-xs text-zinc-500">${p.region}</td>
-        <td class="px-5 py-3 text-xs font-mono text-white">${p.host}</td>
-        <td class="px-5 py-3 text-xs text-zinc-300">${p.port}</td>
-        <td class="px-5 py-3 text-xs font-bold ${latencyColor}">${latencyText}</td>
-        <td class="px-5 py-3 text-xs text-zinc-500">${p.lastChecked}</td>
-        <td class="px-5 py-3 text-right">
-          <button onclick="pmTestOne('${p.id}')" class="px-2 py-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-yellow-400 transition" title="Test">&#9889;</button>
-          <button onclick="pmDeleteOne('${p.id}')" class="px-2 py-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-red-400 transition" title="Delete">&#128465;</button>
-        </td>
-      </tr>`;
-    }).join('');
-  }catch(e){console.error('PM load error:',e);}
-}
-
-async function loadAutoTestSettings(){
-  try{
-    const r=await fetch('/api/proxy/manager/auto-test',{headers:H()});
-    const d=await r.json();
-    document.getElementById('pm-autotest-enabled').checked=d.enabled;
-    document.getElementById('pm-autotest-interval').value=d.intervalMinutes||5;
-    document.getElementById('pm-autodelete').checked=d.autoDeleteFailed;
-  }catch(e){}
-}
-
-async function updateAutoTest(){
-  const enabled=document.getElementById('pm-autotest-enabled').checked;
-  const intervalMinutes=parseInt(document.getElementById('pm-autotest-interval').value);
-  const autoDeleteFailed=document.getElementById('pm-autodelete').checked;
-  await fetch('/api/proxy/manager/auto-test',{method:'PUT',headers:H(),body:JSON.stringify({enabled,intervalMinutes,autoDeleteFailed})});
-}
-
-async function pmAddProxies(){
-  const input=document.getElementById('pm-add-input').value.trim();
-  const type=document.getElementById('pm-add-type').value;
-  if(!input){alert('Enter at least one proxy');return;}
-  const proxies=input.split('\n').map(l=>l.trim()).filter(l=>l);
-  const r=await fetch('/api/proxy/manager/add',{method:'POST',headers:H(),body:JSON.stringify({proxies,type})});
-  const d=await r.json();
-  document.getElementById('pm-add-input').value='';
-  document.getElementById('pm-modal').classList.add('hidden');
-  alert(`Added ${d.added} proxies (total: ${d.total})`);
-  loadProxyManager();
-}
-
-async function pmImportFromScraper(){
-  const r=await fetch('/api/proxy/manager/import-from-scraper',{method:'POST',headers:H()});
-  const d=await r.json();
-  document.getElementById('pm-modal').classList.add('hidden');
-  alert(`Imported ${d.imported} proxies (total: ${d.total})`);
-  loadProxyManager();
-}
-
-async function pmTestOne(id){
-  await fetch(`/api/proxy/manager/${id}/test`,{method:'POST',headers:H()});
-  loadProxyManager();
-}
-
-async function pmDeleteOne(id){
-  await fetch(`/api/proxy/manager/${id}`,{method:'DELETE',headers:H()});
-  loadProxyManager();
-}
-
-async function pmTestAll(){
-  await fetch('/api/proxy/manager/test-all',{method:'POST',headers:H()});
-  alert('Testing all proxies...');
-  // Poll refresh
-  if(pmRefreshInterval)clearInterval(pmRefreshInterval);
-  pmRefreshInterval=setInterval(loadProxyManager,2000);
-  setTimeout(()=>{if(pmRefreshInterval){clearInterval(pmRefreshInterval);pmRefreshInterval=null;}},120000);
-}
-
-async function pmDeleteFailed(){
-  if(!confirm('Delete all failed proxies?'))return;
-  const r=await fetch('/api/proxy/manager/delete-failed',{method:'POST',headers:H()});
-  const d=await r.json();
-  alert(`Deleted ${d.deleted} failed proxies`);
-  loadProxyManager();
-}
-
-async function pmDeleteAll(){
-  if(!confirm('Delete ALL proxies?'))return;
-  await fetch('/api/proxy/manager/all',{method:'DELETE',headers:H()});
-  loadProxyManager();
-}
-
-function pmFilterRegion(region){
-  pmCurrentRegion=region;
-  loadProxyManager();
-}
-
-// ============ AUTO SCAN + ADD ============
-let autoScanInterval=null;
-async function startAutoScan(){
-  const w=document.getElementById('proxy-workers').value||50;
-  await fetch('/api/proxy/auto-scan',{method:'POST',headers:H(),body:JSON.stringify({concurrency:parseInt(w)})});
-  document.getElementById('autoscan-status').classList.remove('hidden');
-  if(autoScanInterval)clearInterval(autoScanInterval);
-  autoScanInterval=setInterval(pollAutoScan,2000);
-  setTimeout(pollAutoScan,500);
-}
-async function stopAutoScan(){
-  await fetch('/api/proxy/auto-scan/stop',{method:'POST',headers:H()});
-  if(autoScanInterval){clearInterval(autoScanInterval);autoScanInterval=null;}
-  document.getElementById('autoscan-status').classList.add('hidden');
-}
-async function pollAutoScan(){
-  try{
-    const r=await fetch('/api/proxy/auto-scan/status',{headers:H()});
-    const d=await r.json();
-    const el=document.getElementById('autoscan-status');
-    if(d.status==='running'){
-      el.innerHTML=`\u26a1 Auto Scan: Validated <b>${d.validated}</b>/${d.total} | Added <b class="text-emerald-400">${d.added}</b> | Failed ${d.failed}`;
-    } else if(d.status==='done'){
-      el.innerHTML=`\u2705 Auto Scan complete! Added <b class="text-emerald-400">${d.added}</b> proxies to manager`;
-      if(autoScanInterval){clearInterval(autoScanInterval);autoScanInterval=null;}
-    } else if(d.status==='stopped'){
-      el.innerHTML=`\u23f9 Auto Scan stopped. Added <b>${d.added}</b> proxies`;
-      if(autoScanInterval){clearInterval(autoScanInterval);autoScanInterval=null;}
-    }
-  }catch(e){}
-}
 </script>
 </body>
 </html>

@@ -3,9 +3,6 @@ const express = require('express');
 const qrcode = require('qrcode');
 const crypto = require('crypto');
 const fs = require('fs');
-const http = require('http');
-const https = require('https');
-const { URL } = require('url');
 
 const PORT = process.env.PORT || 2785;
 const CONFIG_FILE = '/opt/wa-gateway/config.json';
@@ -101,87 +98,29 @@ app.post('/api/settings/apikey/regenerate', requireSuperadmin, (req, res) => {
 });
 
 // Sessions
-// Proxy config per session: { sessionId: { proxy: 'host:port', autoRotate: bool, rotateInterval: ms } }
-const SESSION_PROXY_FILE = '/opt/wa-gateway/session-proxies.json';
-let sessionProxyConfig = {};
-function loadSessionProxies() { try { sessionProxyConfig = JSON.parse(fs.readFileSync(SESSION_PROXY_FILE, 'utf8')); } catch(e) { sessionProxyConfig = {}; } }
-function saveSessionProxies() { fs.writeFileSync(SESSION_PROXY_FILE, JSON.stringify(sessionProxyConfig, null, 2)); }
-loadSessionProxies();
-
-// Proxy rotation timers
-const rotationTimers = new Map();
-
-function getNextWorkingProxy(currentProxy) {
-  const working = managedProxies.filter(p => p.status === 'ok');
-  if (working.length === 0) return null;
-  if (!currentProxy) return `${working[0].host}:${working[0].port}`;
-  const currentIdx = working.findIndex(p => `${p.host}:${p.port}` === currentProxy);
-  const nextIdx = (currentIdx + 1) % working.length;
-  return `${working[nextIdx].host}:${working[nextIdx].port}`;
-}
-
-function createSession(id, proxyAddr) {
-  if (sessions.has(id)) { const s = sessions.get(id); if (['ready','initializing','qr_ready'].includes(s.status)) return s; s._manualStop = true; try{s.client.destroy();}catch(e){} }
-  // Always read from saved proxy config
-  if (proxyAddr === undefined && sessionProxyConfig[id]?.proxy) proxyAddr = sessionProxyConfig[id].proxy;
-  // proxyAddr: undefined = use saved config, null = force no proxy, string = use this proxy
-  const finalProxy = (proxyAddr === null) ? null : (proxyAddr || null);
-  const puppeteerArgs = ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-extensions'];
-  if (finalProxy) {
-    puppeteerArgs.push(`--proxy-server=${finalProxy}`);
-    console.log(`[WA:${id}] Using proxy: ${finalProxy}`);
-  }
-  const sess = { client: null, qr: null, status: 'initializing', phone: null, name: null, createdAt: new Date(), proxy: finalProxy };
+function createSession(id) {
+  if (sessions.has(id)) { const s = sessions.get(id); if (['ready','initializing','qr_ready'].includes(s.status)) return s; try{s.client.destroy();}catch(e){} }
+  const sess = { client: null, qr: null, status: 'initializing', phone: null, name: null, createdAt: new Date() };
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: id, dataPath: '/opt/wa-gateway/sessions' }),
-    puppeteer: { headless: true, args: puppeteerArgs, timeout: 120000 },
+    puppeteer: { headless: true, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-extensions'], timeout: 120000 },
     webVersionCache: { type: 'none' },
   });
   client.on('loading_screen', (p,m) => console.log(`[WA:${id}] Loading: ${p}% ${m}`));
   client.on('qr', qr => { sess.qr = qr; sess.status = 'qr_ready'; console.log(`[WA:${id}] QR!`); });
-  client.on('ready', () => { sess.qr = null; sess.status = 'ready'; const i = client.info; sess.phone = i?.wid?.user; sess.name = i?.pushname; console.log(`[WA:${id}] Ready: ${sess.phone} ${sess.proxy ? '(proxy: '+sess.proxy+')' : '(direct)' }`); });
+  client.on('ready', () => { sess.qr = null; sess.status = 'ready'; const i = client.info; sess.phone = i?.wid?.user; sess.name = i?.pushname; console.log(`[WA:${id}] Ready: ${sess.phone}`); });
   client.on('authenticated', () => { sess.status = 'authenticated'; });
   client.on('auth_failure', m => { sess.status = 'auth_failure'; });
-  client.on('disconnected', r => { sess.status = 'disconnected'; sess.phone = null; sess.name = null; sess.qr = null; if (!sess._manualStop) setTimeout(() => createSession(id, undefined), 5000); });
+  client.on('disconnected', r => { sess.status = 'disconnected'; sess.phone = null; sess.name = null; sess.qr = null; if (!sess._manualStop) setTimeout(() => createSession(id), 5000); });
   sess.client = client; sessions.set(id, sess);
   client.initialize().catch(e => { console.error(`[WA:${id}] Error: ${e.message}`); sess.status = 'error'; });
   return sess;
 }
-
-// Rotate proxy for a session: destroy + recreate with new proxy
-async function rotateSessionProxy(id) {
-  const s = sessions.get(id);
-  if (!s) return;
-  const cfg = sessionProxyConfig[id];
-  if (!cfg || !cfg.autoRotate) return;
-  const newProxy = getNextWorkingProxy(s.proxy);
-  if (!newProxy || newProxy === s.proxy) return; // no other proxy available
-  console.log(`[WA:${id}] Rotating proxy: ${s.proxy} → ${newProxy}`);
-  cfg.proxy = newProxy; saveSessionProxies();
-  // Destroy and recreate
-  try {
-    s._manualStop = true;
-    if (s.client) await s.client.destroy();
-  } catch(e) {}
-  s._manualStop = false;
-  createSession(id, newProxy);
-}
-
-function setupRotation(id) {
-  // Clear existing timer
-  if (rotationTimers.has(id)) { clearInterval(rotationTimers.get(id)); rotationTimers.delete(id); }
-  const cfg = sessionProxyConfig[id];
-  if (cfg && cfg.autoRotate && cfg.rotateIntervalMs > 0) {
-    const timer = setInterval(() => rotateSessionProxy(id), cfg.rotateIntervalMs);
-    rotationTimers.set(id, timer);
-    console.log(`[WA:${id}] Auto-rotate every ${cfg.rotateIntervalMs/1000}s`);
-  }
-}
 function fmtId(p) { let n = p.replace(/[^0-9]/g, ''); if (n.startsWith('0')) n = '62' + n.slice(1); if (!n.startsWith('62')) n = '62' + n; return n + '@c.us'; }
 
 app.get('/health', (req, res) => { const l=[]; sessions.forEach((s,id)=>l.push({id,status:s.status})); res.json({status:'ok',sessions:l,total:sessions.size,uptime:process.uptime()}); });
-app.get('/api/sessions', (req, res) => { const l=[]; sessions.forEach((s,id)=>{ const cfg=sessionProxyConfig[id]||{}; l.push({id,name:id,status:s.status,phone:s.phone,createdAt:s.createdAt,proxy:s.proxy||null,autoRotate:cfg.autoRotate||false,rotateIntervalMs:cfg.rotateIntervalMs||60000}); }); res.json(l); });
-app.get('/api/sessions/:id', (req, res) => { const s=sessions.get(req.params.id); if(!s) return res.json({id:req.params.id,status:'not_found'}); const cfg=sessionProxyConfig[req.params.id]||{}; res.json({id:req.params.id,status:s.status,phone:s.phone,name:s.name,proxy:s.proxy||null,autoRotate:cfg.autoRotate||false}); });
+app.get('/api/sessions', (req, res) => { const l=[]; sessions.forEach((s,id)=>l.push({id,name:id,status:s.status,phone:s.phone,createdAt:s.createdAt})); res.json(l); });
+app.get('/api/sessions/:id', (req, res) => { const s=sessions.get(req.params.id); if(!s) return res.json({id:req.params.id,status:'not_found'}); res.json({id:req.params.id,status:s.status,phone:s.phone,name:s.name}); });
 app.post('/api/sessions', (req, res) => {
   const id = req.body.id || req.body.name || 'default';
   const s = sessions.get(id);
@@ -202,42 +141,6 @@ app.post('/api/sessions/:id/stop', async (req, res) => {
     s.status = 'stopped'; s.phone = null; s.name = null; s.qr = null; s.client = null;
     res.json({ message: 'Stopped', id: req.params.id });
   } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-// Set proxy for session
-app.put('/api/sessions/:id/proxy', async (req, res) => {
-  const id = req.params.id;
-  const { proxy, autoRotate, rotateIntervalMs } = req.body;
-  // Save config
-  if (!sessionProxyConfig[id]) sessionProxyConfig[id] = {};
-  sessionProxyConfig[id].proxy = proxy || null;
-  sessionProxyConfig[id].autoRotate = autoRotate || false;
-  sessionProxyConfig[id].rotateIntervalMs = rotateIntervalMs || 60000;
-  saveSessionProxies();
-  // Setup rotation timer
-  setupRotation(id);
-  // If session exists and running, restart with new proxy
-  const s = sessions.get(id);
-  if (s && s.client) {
-    try {
-      s._manualStop = true;
-      await s.client.destroy();
-    } catch(e) {}
-    // Remove old session entry so createSession starts fresh
-    sessions.delete(id);
-    // Small delay to ensure cleanup
-    setTimeout(() => createSession(id, proxy || null), 2000);
-    res.json({ message: proxy ? `Proxy set to ${proxy}, session restarting` : 'Proxy removed, session restarting (direct)', id, proxy: proxy || null, autoRotate });
-  } else {
-    res.json({ message: 'Proxy config saved', id, proxy: proxy || null, autoRotate });
-  }
-});
-
-// Get proxy config for session
-app.get('/api/sessions/:id/proxy', (req, res) => {
-  const cfg = sessionProxyConfig[req.params.id] || {};
-  const s = sessions.get(req.params.id);
-  res.json({ proxy: s?.proxy || cfg.proxy || null, autoRotate: cfg.autoRotate || false, rotateIntervalMs: cfg.rotateIntervalMs || 60000 });
 });
 
 // Delete session (remove completely + optional logout)
@@ -270,386 +173,11 @@ app.post('/api/sessions/:id/messages/send-text', async (req, res) => {
   try { const m = await s.client.sendMessage(req.body.chatId, req.body.text); res.json({ success: true, response: m.id._serialized }); } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ============ PROXY SCRAPER ============
-const PROXY_SOURCES = [
-  'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
-  'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt',
-  'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt',
-  'https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt',
-  'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt',
-  'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-https.txt',
-  'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt',
-  'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt',
-  'https://raw.githubusercontent.com/mmpx12/proxy-list/master/https.txt',
-  'https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt',
-  'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt',
-  'https://raw.githubusercontent.com/sunny9577/proxy-scraper/master/proxies.txt',
-  'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt',
-  'https://raw.githubusercontent.com/prxchk/proxy-list/main/http.txt',
-  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/http.txt',
-  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/https.txt',
-  'https://raw.githubusercontent.com/zloi-user/hideip.me/main/socks5.txt',
-  'https://raw.githubusercontent.com/ErcinDedeworken/proxies/main/proxies.txt',
-  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXY_LIST/master/http.txt',
-  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXY_LIST/master/https.txt',
-  'https://raw.githubusercontent.com/Zaeem20/FREE_PROXY_LIST/master/socks5.txt',
-  'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=5000&country=all',
-  'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=5000&country=all',
-  'https://www.proxy-list.download/api/v1/get?type=http',
-  'https://www.proxy-list.download/api/v1/get?type=https',
-  'https://www.proxy-list.download/api/v1/get?type=socks5',
-];
-
-let proxyState = { status: 'idle', scraped: 0, validated: 0, total: 0, working: [], failed: 0, startedAt: null, sources: PROXY_SOURCES.length };
-
-function fetchUrl(url, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { timeout }, res => {
-      let data = ''; res.on('data', c => data += c); res.on('end', () => resolve(data));
-    });
-    req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-  });
-}
-
-function validateProxy(host, port, timeout = 5000) {
-  return new Promise(resolve => {
-    const start = Date.now();
-    const opts = { host, port: parseInt(port), method: 'CONNECT', path: 'www.google.com:443', timeout };
-    const req = http.request(opts);
-    req.on('connect', (res) => {
-      const latency = Date.now() - start;
-      req.destroy();
-      resolve({ host, port, latency, working: true });
-    });
-    req.on('error', () => resolve({ host, port, working: false }));
-    req.on('timeout', () => { req.destroy(); resolve({ host, port, working: false }); });
-    req.end();
-  });
-}
-
-async function scrapeProxies(concurrency = 50) {
-  proxyState = { status: 'scraping', scraped: 0, validated: 0, total: 0, working: [], failed: 0, startedAt: new Date(), sources: PROXY_SOURCES.length };
-  console.log(`[Proxy] Scraping from ${PROXY_SOURCES.length} sources...`);
-
-  const allProxies = new Set();
-  const results = await Promise.allSettled(PROXY_SOURCES.map(async url => {
-    try {
-      const data = await fetchUrl(url);
-      const lines = data.split('\n').map(l => l.trim()).filter(l => /^\d+\.\d+\.\d+\.\d+:\d+$/.test(l));
-      lines.forEach(l => allProxies.add(l));
-      return lines.length;
-    } catch(e) { return 0; }
-  }));
-
-  proxyState.scraped = allProxies.size;
-  proxyState.total = allProxies.size;
-  proxyState.status = 'validating';
-  console.log(`[Proxy] Scraped ${allProxies.size} unique proxies. Validating with ${concurrency} workers...`);
-
-  const proxies = [...allProxies];
-  const working = [];
-  let validated = 0, failed = 0;
-
-  // Process in batches
-  for (let i = 0; i < proxies.length; i += concurrency) {
-    const batch = proxies.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map(p => {
-      const [host, port] = p.split(':');
-      return validateProxy(host, port);
-    }));
-    results.forEach(r => {
-      validated++;
-      if (r.working) { working.push({ proxy: `${r.host}:${r.port}`, latency: r.latency }); }
-      else { failed++; }
-    });
-    proxyState.validated = validated;
-    proxyState.failed = failed;
-    proxyState.working = working.sort((a, b) => a.latency - b.latency);
-  }
-
-  proxyState.status = 'done';
-  proxyState.working = working.sort((a, b) => a.latency - b.latency);
-  console.log(`[Proxy] Done! ${working.length} working / ${allProxies.size} total`);
-  return proxyState;
-}
-
-app.get('/api/proxy/status', (req, res) => {
-  res.json({
-    status: proxyState.status,
-    sources: proxyState.sources,
-    scraped: proxyState.scraped,
-    validated: proxyState.validated,
-    total: proxyState.total,
-    working: proxyState.working.length,
-    failed: proxyState.failed,
-    startedAt: proxyState.startedAt,
-  });
-});
-
-app.get('/api/proxy/list', (req, res) => {
-  const limit = parseInt(req.query.limit) || 100;
-  const type = req.query.type || 'all';
-  res.json(proxyState.working.slice(0, limit));
-});
-
-app.post('/api/proxy/scrape', (req, res) => {
-  if (proxyState.status === 'scraping' || proxyState.status === 'validating') {
-    return res.json({ message: 'Already running', status: proxyState.status });
-  }
-  const concurrency = parseInt(req.body.concurrency) || 50;
-  scrapeProxies(concurrency);
-  res.json({ message: 'Scraping started', sources: PROXY_SOURCES.length, concurrency });
-});
-
-app.post('/api/proxy/stop', (req, res) => {
-  proxyState.status = 'stopped';
-  res.json({ message: 'Stopped' });
-});
-
-// ============ PROXY MANAGER ============
-const PROXIES_FILE = '/opt/wa-gateway/proxies.json';
-const PROXY_SETTINGS_FILE = '/opt/wa-gateway/proxy-settings.json';
-let managedProxies = [];
-let proxyAutoTestInterval = null;
-let proxyAutoTestSettings = { enabled: false, intervalMinutes: 5, autoDeleteFailed: false };
-
-function loadProxies() {
-  try { managedProxies = JSON.parse(fs.readFileSync(PROXIES_FILE, 'utf8')); } catch(e) { managedProxies = []; }
-}
-function saveProxies() { fs.writeFileSync(PROXIES_FILE, JSON.stringify(managedProxies, null, 2)); }
-function loadProxySettings() {
-  try { proxyAutoTestSettings = JSON.parse(fs.readFileSync(PROXY_SETTINGS_FILE, 'utf8')); } catch(e) {}
-}
-function saveProxySettings() { fs.writeFileSync(PROXY_SETTINGS_FILE, JSON.stringify(proxyAutoTestSettings, null, 2)); }
-loadProxies();
-loadProxySettings();
-
-function timeStr() { const d = new Date(); return d.toTimeString().split(' ')[0].slice(0,8); }
-
-// IP Geolocation lookup (free API, batch-friendly)
-async function lookupRegion(ip) {
-  try {
-    const data = await fetchUrl(`http://ip-api.com/json/${ip}?fields=countryCode`);
-    const j = JSON.parse(data);
-    return j.countryCode || '—';
-  } catch(e) { return '—'; }
-}
-
-// Batch region lookup with rate limiting (ip-api allows 45/min)
-async function lookupRegionsBatch(proxies) {
-  const needLookup = proxies.filter(p => !p.region || p.region === '—');
-  for (let i = 0; i < needLookup.length; i += 40) {
-    const batch = needLookup.slice(i, i + 40);
-    // ip-api.com batch endpoint
-    try {
-      const body = JSON.stringify(batch.map(p => ({ query: p.host, fields: 'countryCode,query' })));
-      const data = await new Promise((resolve, reject) => {
-        const req = http.request({ hostname: 'ip-api.com', path: '/batch', method: 'POST', headers: { 'Content-Type': 'application/json' }, timeout: 10000 }, res => {
-          let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d));
-        });
-        req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-        req.write(body); req.end();
-      });
-      const results = JSON.parse(data);
-      results.forEach(r => {
-        const proxy = batch.find(p => p.host === r.query);
-        if (proxy && r.countryCode) proxy.region = r.countryCode;
-      });
-    } catch(e) { console.error('[Proxy] Region batch error:', e.message); }
-    // Rate limit: wait 1.5s between batches
-    if (i + 40 < needLookup.length) await new Promise(r => setTimeout(r, 1500));
-  }
-}
-
-async function testManagedProxy(proxy) {
-  proxy.status = 'testing';
-  const result = await validateProxy(proxy.host, parseInt(proxy.port));
-  proxy.status = result.working ? 'ok' : 'failed';
-  proxy.latency = result.working ? result.latency : null;
-  proxy.lastChecked = timeStr();
-  return proxy;
-}
-
-async function testAllManagedProxies() {
-  const batch = 50;
-  for (let i = 0; i < managedProxies.length; i += batch) {
-    const chunk = managedProxies.slice(i, i + batch);
-    await Promise.all(chunk.map(p => testManagedProxy(p)));
-  }
-  if (proxyAutoTestSettings.autoDeleteFailed) {
-    managedProxies = managedProxies.filter(p => p.status !== 'failed');
-  }
-  saveProxies();
-}
-
-function setupAutoTest() {
-  if (proxyAutoTestInterval) { clearInterval(proxyAutoTestInterval); proxyAutoTestInterval = null; }
-  if (proxyAutoTestSettings.enabled && proxyAutoTestSettings.intervalMinutes > 0) {
-    const ms = proxyAutoTestSettings.intervalMinutes * 60 * 1000;
-    proxyAutoTestInterval = setInterval(() => testAllManagedProxies(), ms);
-    console.log(`[Proxy Manager] Auto-test every ${proxyAutoTestSettings.intervalMinutes}min`);
-  }
-}
-setupAutoTest();
-
-app.get('/api/proxy/manager/list', (req, res) => {
-  let filtered = managedProxies;
-  const region = req.query.region;
-  if (region && region !== 'all') filtered = filtered.filter(p => p.region === region);
-  const stats = { total: managedProxies.length, ok: managedProxies.filter(p=>p.status==='ok').length, failed: managedProxies.filter(p=>p.status==='failed').length };
-  const regions = [...new Set(managedProxies.map(p => p.region).filter(r => r && r !== '—'))].sort();
-  res.json({ proxies: filtered, stats, regions });
-});
-
-app.post('/api/proxy/manager/add', (req, res) => {
-  const { host, port, type, proxies } = req.body;
-  const added = [];
-  if (proxies && Array.isArray(proxies)) {
-    proxies.forEach(p => {
-      const parts = p.trim().split(':');
-      if (parts.length === 2 && parts[0] && parts[1]) {
-        const exists = managedProxies.find(m => m.host === parts[0] && m.port === parseInt(parts[1]));
-        if (!exists) {
-          const proxy = { id: crypto.randomBytes(4).toString('hex'), host: parts[0], port: parseInt(parts[1]), type: type || 'HTTP', region: '—', status: 'unknown', latency: null, lastChecked: '—', addedAt: new Date().toISOString() };
-          managedProxies.push(proxy); added.push(proxy);
-        }
-      }
-    });
-  } else if (host && port) {
-    const exists = managedProxies.find(m => m.host === host && m.port === parseInt(port));
-    if (!exists) {
-      const proxy = { id: crypto.randomBytes(4).toString('hex'), host, port: parseInt(port), type: type || 'HTTP', region: '—', status: 'unknown', latency: null, lastChecked: '—', addedAt: new Date().toISOString() };
-      managedProxies.push(proxy); added.push(proxy);
-    }
-  }
-  saveProxies();
-  res.json({ added: added.length, total: managedProxies.length });
-  // Lookup regions in background
-  if (added.length > 0) { lookupRegionsBatch(added).then(() => saveProxies()); }
-});
-
-app.delete('/api/proxy/manager/:id', (req, res) => {
-  const idx = managedProxies.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  managedProxies.splice(idx, 1); saveProxies();
-  res.json({ message: 'Deleted', total: managedProxies.length });
-});
-
-app.post('/api/proxy/manager/:id/test', async (req, res) => {
-  const proxy = managedProxies.find(p => p.id === req.params.id);
-  if (!proxy) return res.status(404).json({ error: 'Not found' });
-  await testManagedProxy(proxy); saveProxies();
-  res.json(proxy);
-});
-
-app.post('/api/proxy/manager/test-all', (req, res) => {
-  testAllManagedProxies();
-  res.json({ message: 'Testing started', total: managedProxies.length });
-});
-
-app.post('/api/proxy/manager/delete-failed', (req, res) => {
-  const before = managedProxies.length;
-  managedProxies = managedProxies.filter(p => p.status !== 'failed');
-  saveProxies();
-  res.json({ deleted: before - managedProxies.length, total: managedProxies.length });
-});
-
-app.delete('/api/proxy/manager/all', (req, res) => {
-  const count = managedProxies.length;
-  managedProxies = []; saveProxies();
-  res.json({ deleted: count });
-});
-
-app.post('/api/proxy/manager/import-from-scraper', async (req, res) => {
-  let imported = 0;
-  const newProxies = [];
-  proxyState.working.forEach(w => {
-    const [host, port] = w.proxy.split(':');
-    const exists = managedProxies.find(m => m.host === host && m.port === parseInt(port));
-    if (!exists) {
-      const p = { id: crypto.randomBytes(4).toString('hex'), host, port: parseInt(port), type: 'HTTP', region: '—', status: 'ok', latency: w.latency, lastChecked: timeStr(), addedAt: new Date().toISOString() };
-      managedProxies.push(p); newProxies.push(p); imported++;
-    }
-  });
-  saveProxies();
-  res.json({ imported, total: managedProxies.length });
-  // Lookup regions in background
-  if (newProxies.length > 0) { lookupRegionsBatch(newProxies).then(() => saveProxies()); }
-});
-
-// Auto Scan + Add: scrape → validate → auto-add working to manager + region lookup
-let autoScanState = { status: 'idle', scraped: 0, validated: 0, total: 0, added: 0, failed: 0 };
-
-app.post('/api/proxy/auto-scan', (req, res) => {
-  if (autoScanState.status === 'running') return res.json({ message: 'Already running', ...autoScanState });
-  const concurrency = parseInt(req.body.concurrency) || 50;
-  autoScanState = { status: 'running', scraped: 0, validated: 0, total: 0, added: 0, failed: 0, startedAt: new Date() };
-  runAutoScan(concurrency);
-  res.json({ message: 'Auto Scan started', concurrency });
-});
-
-app.get('/api/proxy/auto-scan/status', (req, res) => res.json(autoScanState));
-
-app.post('/api/proxy/auto-scan/stop', (req, res) => {
-  autoScanState.status = 'stopped';
-  res.json({ message: 'Stopped' });
-});
-
-async function runAutoScan(concurrency) {
-  console.log('[AutoScan] Starting...');
-  // Phase 1: Scrape
-  const allProxies = new Set();
-  await Promise.allSettled(PROXY_SOURCES.map(async url => {
-    try {
-      const data = await fetchUrl(url);
-      data.split('\n').map(l => l.trim()).filter(l => /^\d+\.\d+\.\d+\.\d+:\d+$/.test(l)).forEach(l => allProxies.add(l));
-    } catch(e) {}
-  }));
-  autoScanState.scraped = allProxies.size;
-  autoScanState.total = allProxies.size;
-  console.log(`[AutoScan] Scraped ${allProxies.size}. Validating...`);
-
-  // Phase 2: Validate + auto-add
-  const proxies = [...allProxies];
-  const newProxies = [];
-  for (let i = 0; i < proxies.length; i += concurrency) {
-    if (autoScanState.status === 'stopped') break;
-    const batch = proxies.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map(p => { const [h, pt] = p.split(':'); return validateProxy(h, pt); }));
-    results.forEach(r => {
-      autoScanState.validated++;
-      if (r.working) {
-        const exists = managedProxies.find(m => m.host === r.host && m.port === parseInt(r.port));
-        if (!exists) {
-          const p = { id: crypto.randomBytes(4).toString('hex'), host: r.host, port: parseInt(r.port), type: 'HTTP', region: '—', status: 'ok', latency: r.latency, lastChecked: timeStr(), addedAt: new Date().toISOString() };
-          managedProxies.push(p); newProxies.push(p); autoScanState.added++;
-        }
-      } else { autoScanState.failed++; }
-    });
-  }
-  saveProxies();
-  autoScanState.status = 'done';
-  console.log(`[AutoScan] Done! Added ${autoScanState.added} proxies`);
-  // Phase 3: Region lookup in background
-  if (newProxies.length > 0) { lookupRegionsBatch(newProxies).then(() => saveProxies()); }
-}
-
-app.get('/api/proxy/manager/auto-test', (req, res) => res.json(proxyAutoTestSettings));
-
-app.put('/api/proxy/manager/auto-test', (req, res) => {
-  if (req.body.enabled !== undefined) proxyAutoTestSettings.enabled = req.body.enabled;
-  if (req.body.intervalMinutes) proxyAutoTestSettings.intervalMinutes = parseInt(req.body.intervalMinutes);
-  if (req.body.autoDeleteFailed !== undefined) proxyAutoTestSettings.autoDeleteFailed = req.body.autoDeleteFailed;
-  saveProxySettings(); setupAutoTest();
-  res.json(proxyAutoTestSettings);
-});
-
 app.listen(PORT, () => {
   console.log(`[WA Gateway] Port ${PORT} | Multi-session | ${config.users.length} users`);
   const sessDir = '/opt/wa-gateway/sessions';
   if (fs.existsSync(sessDir)) {
     const dirs = fs.readdirSync(sessDir).filter(d => d.startsWith('session-'));
-    dirs.forEach((d, i) => { const id = d.replace('session-', ''); console.log('[WA] Restoring:', id); setTimeout(() => { createSession(id); setupRotation(id); }, i * 5000); });
+    dirs.forEach((d, i) => { const id = d.replace('session-', ''); console.log('[WA] Restoring:', id); setTimeout(() => createSession(id), i * 5000); });
   }
 });
