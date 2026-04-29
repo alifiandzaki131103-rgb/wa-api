@@ -52,6 +52,9 @@
       <a onclick="showPage('send')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="send">
         <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
         <span>Send Message</span></a>
+      <a onclick="showPage('users')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="users">
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <span>Users</span></a>
       <a onclick="showPage('settings')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="settings">
         <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
         <span>Settings</span></a>
@@ -105,6 +108,27 @@
           <button onclick="sendMsg()" class="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">📤 Send Message</button>
           <div id="send-result" class="hidden card rounded-xl p-3 text-xs"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Users Page -->
+    <div id="page-users" class="hidden p-6 space-y-6">
+      <div class="card rounded-2xl p-5">
+        <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Add User</h3>
+        <div class="flex gap-3 flex-wrap">
+          <input id="new-user" placeholder="Username" class="flex-1 min-w-[120px] px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none focus:border-emerald-500/50" />
+          <input id="new-pass" type="password" placeholder="Password" class="flex-1 min-w-[120px] px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none focus:border-emerald-500/50" />
+          <select id="new-role" class="px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none">
+            <option value="admin">Admin</option>
+            <option value="superadmin">Superadmin</option>
+          </select>
+          <button onclick="addUser()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">+ Add</button>
+        </div>
+        <div id="user-add-result" class="hidden mt-3 card rounded-xl p-3 text-xs"></div>
+      </div>
+      <div class="card rounded-2xl p-5">
+        <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">User List</h3>
+        <div id="user-list" class="space-y-2"></div>
       </div>
     </div>
 
@@ -166,7 +190,7 @@ async function doLogin(){
 }
 function doLogout(){localStorage.removeItem('wa_token');token='';showLogin();}
 
-const titles={sessions:['Sessions','Manage WhatsApp sessions'],send:['Send Message','Send via WhatsApp'],settings:['Settings','API key management'],docs:['API Docs','REST API reference']};
+const titles={sessions:['Sessions','Manage WhatsApp sessions'],send:['Send Message','Send via WhatsApp'],users:['Users','Manage dashboard users'],settings:['Settings','API key management'],docs:['API Docs','REST API reference']};
 function showPage(p){
   document.querySelectorAll('[id^="page-"]').forEach(el=>el.classList.add('hidden'));
   document.getElementById('page-'+p)?.classList.remove('hidden');
@@ -175,6 +199,7 @@ function showPage(p){
   const t=titles[p]||['',''];document.getElementById('page-title').textContent=t[0];document.getElementById('page-desc').textContent=t[1];
   if(p==='settings')loadSettings();
   if(p==='send')updateSendDropdown();
+  if(p==='users')loadUsers();
 }
 
 let allSessions=[];
@@ -261,6 +286,51 @@ async function saveKey(){
   const r=await fetch('/api/settings/apikey',{method:'PUT',headers:H(),body:JSON.stringify({apiKey:k})});const d=await r.json();
   document.getElementById('current-apikey').value=d.apiKey;document.getElementById('new-apikey').value='';
   const el=document.getElementById('key-result');el.classList.remove('hidden');el.innerHTML='<span class="text-emerald-400">✅ Saved!</span>';
+}
+
+// Users
+async function loadUsers(){
+  try{const r=await fetch('/api/users',{headers:H()});const users=await r.json();
+    const el=document.getElementById('user-list');
+    el.innerHTML=users.map(u=>`<div class="flex items-center justify-between bg-zinc-900/50 rounded-xl px-4 py-3">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-${u.role==='superadmin'?'yellow':'blue'}-500/10 rounded-lg flex items-center justify-center">
+          <span class="text-xs">${u.role==='superadmin'?'👑':'👤'}</span>
+        </div>
+        <div>
+          <p class="text-sm font-bold">${u.username}</p>
+          <p class="text-[10px] text-zinc-500">${u.role} • ${new Date(u.createdAt).toLocaleDateString()}</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="editUser('${u.id}','${u.username}')" class="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold">✏️</button>
+        <button onclick="deleteUser('${u.id}','${u.username}')" class="px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-[10px] font-bold">🗑</button>
+      </div>
+    </div>`).join('');
+  }catch(e){}
+}
+async function addUser(){
+  const u=document.getElementById('new-user').value.trim(),p=document.getElementById('new-pass').value,r=document.getElementById('new-role').value;
+  const el=document.getElementById('user-add-result');el.classList.remove('hidden');
+  try{const res=await fetch('/api/users',{method:'POST',headers:H(),body:JSON.stringify({username:u,password:p,role:r})});const d=await res.json();
+    if(!res.ok){el.innerHTML=`<span class="text-red-400">❌ ${d.error}</span>`;return;}
+    el.innerHTML=`<span class="text-emerald-400">✅ User ${d.username} created!</span>`;
+    document.getElementById('new-user').value='';document.getElementById('new-pass').value='';
+    loadUsers();
+  }catch(e){el.innerHTML=`<span class="text-red-400">❌ ${e.message}</span>`;}
+}
+async function editUser(id,name){
+  const newPass=prompt('New password for '+name+' (leave empty to skip):');
+  if(newPass===null)return;
+  const newRole=prompt('Role (admin/superadmin):','admin');
+  const body={}; if(newPass)body.password=newPass; if(newRole)body.role=newRole;
+  await fetch('/api/users/'+id,{method:'PUT',headers:H(),body:JSON.stringify(body)});
+  loadUsers();
+}
+async function deleteUser(id,name){
+  if(!confirm('Delete user '+name+'?'))return;
+  const r=await fetch('/api/users/'+id,{method:'DELETE',headers:H()});const d=await r.json();
+  if(!r.ok)alert(d.error); loadUsers();
 }
 
 setInterval(()=>{if(token)loadSessions();},5000);
