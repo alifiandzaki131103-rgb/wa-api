@@ -377,7 +377,8 @@ function showPage(p){
 
 let allSessions=[];
 async function loadSessions(){
-  try{const r=await fetch('/api/sessions',{headers:H()});if(r.status===401){doLogout();return;}
+  try{await loadManagedProxiesForSessions();
+    const r=await fetch('/api/sessions',{headers:H()});if(r.status===401){doLogout();return;}
     allSessions=await r.json();document.getElementById('total-sessions').textContent=allSessions.length;
     renderSessions();
     // Load QR for qr_ready sessions
@@ -394,9 +395,17 @@ async function loadSessions(){
 function renderSessions(){
   const el=document.getElementById('session-list');
   if(!allSessions.length){el.innerHTML='<div class="card rounded-2xl p-8 text-center text-zinc-500 text-sm">No sessions. Create one above.</div>';return;}
+  // Build proxy options from managed proxies
+  const proxyOpts = (managedProxies||[]).filter(p=>p.status==='ok').map(p=>`${p.host}:${p.port}`);
   el.innerHTML=allSessions.map(s=>{
-    const colors={ready:'emerald',qr_ready:'yellow',initializing:'blue',authenticated:'blue',disconnected:'red',error:'red',not_found:'zinc'};
+    const colors={ready:'emerald',qr_ready:'yellow',initializing:'blue',authenticated:'blue',disconnected:'red',error:'red',not_found:'zinc',stopped:'zinc'};
     const c=colors[s.status]||'red';
+    const proxyLabel = s.proxy ? `🌐 ${s.proxy}` : '🔗 Direct';
+    const proxyColor = s.proxy ? 'text-blue-400' : 'text-zinc-500';
+    const rotateLabel = s.autoRotate ? `🔄 ${(s.rotateIntervalMs||60000)/1000}s` : '';
+    // Build proxy select options
+    let proxySelectOpts = `<option value="" ${!s.proxy?'selected':''}>Direct (no proxy)</option>`;
+    proxyOpts.forEach(p => { proxySelectOpts += `<option value="${p}" ${s.proxy===p?'selected':''}>${p}</option>`; });
     return `<div class="card rounded-2xl p-5 ${s.status==='ready'?'glow-green':s.status==='qr_ready'?'glow-yellow':''}">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
@@ -408,9 +417,29 @@ function renderSessions(){
             <p class="text-[10px] text-zinc-500">${s.phone?'+'+s.phone:'No phone connected'}</p>
           </div>
         </div>
-        <span class="text-[10px] font-black px-2.5 py-1 rounded-full bg-${c}-500/10 text-${c}-400 uppercase">${s.status.replace('_',' ')}</span>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-bold ${proxyColor}">${proxyLabel}</span>
+          ${rotateLabel?`<span class="text-[10px] font-bold text-yellow-400">${rotateLabel}</span>`:''}
+          <span class="text-[10px] font-black px-2.5 py-1 rounded-full bg-${c}-500/10 text-${c}-400 uppercase">${s.status.replace('_',' ')}</span>
+        </div>
       </div>
       ${s._qr?`<div class="bg-white p-3 rounded-xl inline-block mb-4"><img src="data:image/png;base64,${s._qr}" class="w-48 h-48"/></div><p class="text-[10px] text-zinc-500 mb-4">Scan with WhatsApp → Linked Devices</p>`:''}
+      <!-- Proxy Controls -->
+      <div class="flex items-center gap-2 mb-3 flex-wrap">
+        <select onchange="setSessionProxy('${s.id}',this)" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-[11px] outline-none min-w-[180px]">
+          ${proxySelectOpts}
+        </select>
+        <label class="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+          <input type="checkbox" ${s.autoRotate?'checked':''} onchange="toggleAutoRotate('${s.id}',this.checked)" class="accent-emerald-500" />
+          Auto-rotate
+        </label>
+        <select onchange="setRotateInterval('${s.id}',this.value)" class="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] outline-none">
+          <option value="60000" ${(s.rotateIntervalMs||60000)===60000?'selected':''}>1 min</option>
+          <option value="180000" ${s.rotateIntervalMs===180000?'selected':''}>3 min</option>
+          <option value="300000" ${s.rotateIntervalMs===300000?'selected':''}>5 min</option>
+          <option value="600000" ${s.rotateIntervalMs===600000?'selected':''}>10 min</option>
+        </select>
+      </div>
       <div class="flex gap-2">
         <button onclick="startSess('${s.id}')" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg text-xs font-bold transition">▶ Start</button>
         <button onclick="stopSess('${s.id}')" class="px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 rounded-lg text-xs font-bold transition">⏸ Stop</button>
@@ -426,6 +455,23 @@ async function addSession(){
   await fetch('/api/sessions',{method:'POST',headers:H(),body:JSON.stringify({id})});
   document.getElementById('new-session-id').value='';
   setTimeout(loadSessions,2000);
+}
+let managedProxies=[];
+async function loadManagedProxiesForSessions(){
+  try{const r=await fetch('/api/proxy/manager/list',{headers:H()});const d=await r.json();managedProxies=d.proxies||[];}catch(e){managedProxies=[];}
+}
+async function setSessionProxy(id,sel){
+  const proxy=sel.value||null;
+  await fetch('/api/sessions/'+id+'/proxy',{method:'PUT',headers:H(),body:JSON.stringify({proxy})});
+  setTimeout(loadSessions,3000);
+}
+async function toggleAutoRotate(id,enabled){
+  const s=allSessions.find(x=>x.id===id);
+  await fetch('/api/sessions/'+id+'/proxy',{method:'PUT',headers:H(),body:JSON.stringify({proxy:s?.proxy||null,autoRotate:enabled,rotateIntervalMs:s?.rotateIntervalMs||60000})});
+}
+async function setRotateInterval(id,ms){
+  const s=allSessions.find(x=>x.id===id);
+  await fetch('/api/sessions/'+id+'/proxy',{method:'PUT',headers:H(),body:JSON.stringify({proxy:s?.proxy||null,autoRotate:s?.autoRotate||false,rotateIntervalMs:parseInt(ms)})});
 }
 async function startSess(id){await fetch('/api/sessions',{method:'POST',headers:H(),body:JSON.stringify({id})});setTimeout(loadSessions,3000);}
 async function stopSess(id){await fetch('/api/sessions/'+id+'/stop',{method:'POST',headers:H()});setTimeout(loadSessions,1000);}

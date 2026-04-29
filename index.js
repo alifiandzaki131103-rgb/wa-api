@@ -101,17 +101,43 @@ app.post('/api/settings/apikey/regenerate', requireSuperadmin, (req, res) => {
 });
 
 // Sessions
-function createSession(id) {
+// Proxy config per session: { sessionId: { proxy: 'host:port', autoRotate: bool, rotateInterval: ms } }
+const SESSION_PROXY_FILE = '/opt/wa-gateway/session-proxies.json';
+let sessionProxyConfig = {};
+function loadSessionProxies() { try { sessionProxyConfig = JSON.parse(fs.readFileSync(SESSION_PROXY_FILE, 'utf8')); } catch(e) { sessionProxyConfig = {}; } }
+function saveSessionProxies() { fs.writeFileSync(SESSION_PROXY_FILE, JSON.stringify(sessionProxyConfig, null, 2)); }
+loadSessionProxies();
+
+// Proxy rotation timers
+const rotationTimers = new Map();
+
+function getNextWorkingProxy(currentProxy) {
+  const working = managedProxies.filter(p => p.status === 'ok');
+  if (working.length === 0) return null;
+  if (!currentProxy) return `${working[0].host}:${working[0].port}`;
+  const currentIdx = working.findIndex(p => `${p.host}:${p.port}` === currentProxy);
+  const nextIdx = (currentIdx + 1) % working.length;
+  return `${working[nextIdx].host}:${working[nextIdx].port}`;
+}
+
+function createSession(id, proxyAddr) {
   if (sessions.has(id)) { const s = sessions.get(id); if (['ready','initializing','qr_ready'].includes(s.status)) return s; try{s.client.destroy();}catch(e){} }
-  const sess = { client: null, qr: null, status: 'initializing', phone: null, name: null, createdAt: new Date() };
+  // Use saved proxy config if not explicitly provided
+  if (!proxyAddr && sessionProxyConfig[id]?.proxy) proxyAddr = sessionProxyConfig[id].proxy;
+  const puppeteerArgs = ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-extensions'];
+  if (proxyAddr) {
+    puppeteerArgs.push(`--proxy-server=${proxyAddr}`);
+    console.log(`[WA:${id}] Using proxy: ${proxyAddr}`);
+  }
+  const sess = { client: null, qr: null, status: 'initializing', phone: null, name: null, createdAt: new Date(), proxy: proxyAddr || null };
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: id, dataPath: '/opt/wa-gateway/sessions' }),
-    puppeteer: { headless: true, args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-extensions'], timeout: 120000 },
+    puppeteer: { headless: true, args: puppeteerArgs, timeout: 120000 },
     webVersionCache: { type: 'none' },
   });
   client.on('loading_screen', (p,m) => console.log(`[WA:${id}] Loading: ${p}% ${m}`));
   client.on('qr', qr => { sess.qr = qr; sess.status = 'qr_ready'; console.log(`[WA:${id}] QR!`); });
-  client.on('ready', () => { sess.qr = null; sess.status = 'ready'; const i = client.info; sess.phone = i?.wid?.user; sess.name = i?.pushname; console.log(`[WA:${id}] Ready: ${sess.phone}`); });
+  client.on('ready', () => { sess.qr = null; sess.status = 'ready'; const i = client.info; sess.phone = i?.wid?.user; sess.name = i?.pushname; console.log(`[WA:${id}] Ready: ${sess.phone} ${sess.proxy ? '(proxy: '+sess.proxy+')' : '(direct)' }`); });
   client.on('authenticated', () => { sess.status = 'authenticated'; });
   client.on('auth_failure', m => { sess.status = 'auth_failure'; });
   client.on('disconnected', r => { sess.status = 'disconnected'; sess.phone = null; sess.name = null; sess.qr = null; if (!sess._manualStop) setTimeout(() => createSession(id), 5000); });
@@ -119,11 +145,41 @@ function createSession(id) {
   client.initialize().catch(e => { console.error(`[WA:${id}] Error: ${e.message}`); sess.status = 'error'; });
   return sess;
 }
+
+// Rotate proxy for a session: destroy + recreate with new proxy
+async function rotateSessionProxy(id) {
+  const s = sessions.get(id);
+  if (!s) return;
+  const cfg = sessionProxyConfig[id];
+  if (!cfg || !cfg.autoRotate) return;
+  const newProxy = getNextWorkingProxy(s.proxy);
+  if (!newProxy || newProxy === s.proxy) return; // no other proxy available
+  console.log(`[WA:${id}] Rotating proxy: ${s.proxy} → ${newProxy}`);
+  cfg.proxy = newProxy; saveSessionProxies();
+  // Destroy and recreate
+  try {
+    s._manualStop = true;
+    if (s.client) await s.client.destroy();
+  } catch(e) {}
+  s._manualStop = false;
+  createSession(id, newProxy);
+}
+
+function setupRotation(id) {
+  // Clear existing timer
+  if (rotationTimers.has(id)) { clearInterval(rotationTimers.get(id)); rotationTimers.delete(id); }
+  const cfg = sessionProxyConfig[id];
+  if (cfg && cfg.autoRotate && cfg.rotateIntervalMs > 0) {
+    const timer = setInterval(() => rotateSessionProxy(id), cfg.rotateIntervalMs);
+    rotationTimers.set(id, timer);
+    console.log(`[WA:${id}] Auto-rotate every ${cfg.rotateIntervalMs/1000}s`);
+  }
+}
 function fmtId(p) { let n = p.replace(/[^0-9]/g, ''); if (n.startsWith('0')) n = '62' + n.slice(1); if (!n.startsWith('62')) n = '62' + n; return n + '@c.us'; }
 
 app.get('/health', (req, res) => { const l=[]; sessions.forEach((s,id)=>l.push({id,status:s.status})); res.json({status:'ok',sessions:l,total:sessions.size,uptime:process.uptime()}); });
-app.get('/api/sessions', (req, res) => { const l=[]; sessions.forEach((s,id)=>l.push({id,name:id,status:s.status,phone:s.phone,createdAt:s.createdAt})); res.json(l); });
-app.get('/api/sessions/:id', (req, res) => { const s=sessions.get(req.params.id); if(!s) return res.json({id:req.params.id,status:'not_found'}); res.json({id:req.params.id,status:s.status,phone:s.phone,name:s.name}); });
+app.get('/api/sessions', (req, res) => { const l=[]; sessions.forEach((s,id)=>{ const cfg=sessionProxyConfig[id]||{}; l.push({id,name:id,status:s.status,phone:s.phone,createdAt:s.createdAt,proxy:s.proxy||null,autoRotate:cfg.autoRotate||false,rotateIntervalMs:cfg.rotateIntervalMs||60000}); }); res.json(l); });
+app.get('/api/sessions/:id', (req, res) => { const s=sessions.get(req.params.id); if(!s) return res.json({id:req.params.id,status:'not_found'}); const cfg=sessionProxyConfig[req.params.id]||{}; res.json({id:req.params.id,status:s.status,phone:s.phone,name:s.name,proxy:s.proxy||null,autoRotate:cfg.autoRotate||false}); });
 app.post('/api/sessions', (req, res) => {
   const id = req.body.id || req.body.name || 'default';
   const s = sessions.get(id);
@@ -144,6 +200,40 @@ app.post('/api/sessions/:id/stop', async (req, res) => {
     s.status = 'stopped'; s.phone = null; s.name = null; s.qr = null; s.client = null;
     res.json({ message: 'Stopped', id: req.params.id });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Set proxy for session
+app.put('/api/sessions/:id/proxy', async (req, res) => {
+  const id = req.params.id;
+  const { proxy, autoRotate, rotateIntervalMs } = req.body;
+  // Save config
+  if (!sessionProxyConfig[id]) sessionProxyConfig[id] = {};
+  sessionProxyConfig[id].proxy = proxy || null;
+  sessionProxyConfig[id].autoRotate = autoRotate || false;
+  sessionProxyConfig[id].rotateIntervalMs = rotateIntervalMs || 60000;
+  saveSessionProxies();
+  // Setup rotation timer
+  setupRotation(id);
+  // If session exists and running, restart with new proxy
+  const s = sessions.get(id);
+  if (s && s.client) {
+    try {
+      s._manualStop = true;
+      await s.client.destroy();
+    } catch(e) {}
+    s._manualStop = false;
+    createSession(id, proxy || undefined);
+    res.json({ message: proxy ? `Proxy set to ${proxy}, session restarting` : 'Proxy removed, session restarting (direct)', id, proxy: proxy || null, autoRotate });
+  } else {
+    res.json({ message: 'Proxy config saved', id, proxy: proxy || null, autoRotate });
+  }
+});
+
+// Get proxy config for session
+app.get('/api/sessions/:id/proxy', (req, res) => {
+  const cfg = sessionProxyConfig[req.params.id] || {};
+  const s = sessions.get(req.params.id);
+  res.json({ proxy: s?.proxy || cfg.proxy || null, autoRotate: cfg.autoRotate || false, rotateIntervalMs: cfg.rotateIntervalMs || 60000 });
 });
 
 // Delete session (remove completely + optional logout)
@@ -556,6 +646,6 @@ app.listen(PORT, () => {
   const sessDir = '/opt/wa-gateway/sessions';
   if (fs.existsSync(sessDir)) {
     const dirs = fs.readdirSync(sessDir).filter(d => d.startsWith('session-'));
-    dirs.forEach((d, i) => { const id = d.replace('session-', ''); console.log('[WA] Restoring:', id); setTimeout(() => createSession(id), i * 5000); });
+    dirs.forEach((d, i) => { const id = d.replace('session-', ''); console.log('[WA] Restoring:', id); setTimeout(() => { createSession(id); setupRotation(id); }, i * 5000); });
   }
 });
