@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WA Gateway - NMS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','sans-serif']}}}}</script>
+  <style>
+    body{background:#09090b} .sidebar{background:linear-gradient(180deg,#111113,#0c0c0e)} .card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)} .card:hover{border-color:rgba(255,255,255,.1)} .glow-green{box-shadow:0 0 20px rgba(16,185,129,.15)} .glow-yellow{box-shadow:0 0 20px rgba(234,179,8,.15)} .pulse{animation:pulse 2s infinite} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}} ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
+  </style>
+</head>
+<body class="min-h-screen text-white font-sans">
+
+<!-- LOGIN -->
+<div id="login-page" class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+      </div>
+      <h1 class="text-xl font-black">WhatsApp Gateway</h1>
+      <p class="text-xs text-zinc-500 mt-1">NMS Network Management System</p>
+    </div>
+    <div class="card rounded-2xl p-6 space-y-4">
+      <div><label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Username</label>
+        <input id="login-user" type="text" placeholder="admin" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none focus:border-emerald-500/50" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" /></div>
+      <div><label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Password</label>
+        <input id="login-pass" type="password" placeholder="••••••••" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none focus:border-emerald-500/50" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+      <button onclick="doLogin()" class="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">Sign In</button>
+      <p id="login-err" class="text-xs text-red-400 hidden text-center"></p>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden min-h-screen flex">
+  <aside class="sidebar w-64 min-h-screen border-r border-zinc-800/50 flex flex-col fixed left-0 top-0 bottom-0 z-10">
+    <div class="p-5 border-b border-zinc-800/50">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-emerald-500/10 rounded-xl flex items-center justify-center">
+          <svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+        </div>
+        <div><h2 class="text-sm font-black">WA Gateway</h2><p class="text-[10px] text-zinc-500">Multi-Session</p></div>
+      </div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <a onclick="showPage('sessions')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="sessions">
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+        <span>Sessions</span></a>
+      <a onclick="showPage('send')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="send">
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        <span>Send Message</span></a>
+      <a onclick="showPage('settings')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="settings">
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Settings</span></a>
+      <a onclick="showPage('docs')" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm cursor-pointer hover:bg-white/5" data-page="docs">
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        <span>API Docs</span></a>
+    </nav>
+    <div class="p-3 border-t border-zinc-800/50">
+      <button onclick="doLogout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-500 hover:text-red-400 hover:bg-red-500/5 cursor-pointer">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        <span>Logout</span></button>
+    </div>
+  </aside>
+
+  <main class="flex-1 ml-64">
+    <header class="sticky top-0 z-10 border-b border-zinc-800/50 bg-[#09090b]/80 backdrop-blur-xl px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div><h1 id="page-title" class="text-lg font-bold">Sessions</h1><p id="page-desc" class="text-xs text-zinc-500">Manage WhatsApp sessions</p></div>
+        <div id="header-stats" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800/50 text-xs font-bold text-zinc-400">
+          <span id="total-sessions">0</span> sessions
+        </div>
+      </div>
+    </header>
+
+    <!-- Sessions Page -->
+    <div id="page-sessions" class="p-6 space-y-6">
+      <!-- Add Session -->
+      <div class="card rounded-2xl p-5">
+        <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Create New Session</h3>
+        <div class="flex gap-3">
+          <input id="new-session-id" placeholder="Session name (e.g. billing, support)" class="flex-1 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none focus:border-emerald-500/50" />
+          <button onclick="addSession()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">+ Create</button>
+        </div>
+      </div>
+
+      <!-- Session List -->
+      <div id="session-list" class="space-y-4"></div>
+    </div>
+
+    <!-- Send Message Page -->
+    <div id="page-send" class="hidden p-6 space-y-6">
+      <div class="card rounded-2xl p-6 max-w-lg">
+        <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-5">Send WhatsApp Message</h3>
+        <div class="space-y-4">
+          <div><label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Session</label>
+            <select id="send-session" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none"></select></div>
+          <div><label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Phone Number</label>
+            <input id="send-phone" placeholder="628xxxxxxxxxx" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none focus:border-emerald-500/50" /></div>
+          <div><label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Message</label>
+            <textarea id="send-msg" rows="4" placeholder="Type your message..." class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm outline-none focus:border-emerald-500/50 resize-none"></textarea></div>
+          <button onclick="sendMsg()" class="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition active:scale-[.98]">📤 Send Message</button>
+          <div id="send-result" class="hidden card rounded-xl p-3 text-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Page -->
+    <div id="page-settings" class="hidden p-6 space-y-6">
+      <div class="card rounded-2xl p-6 max-w-lg">
+        <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-5">API Key</h3>
+        <div class="space-y-4">
+          <div class="flex gap-2">
+            <div class="flex-1 relative">
+              <input id="current-apikey" type="password" readonly class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-mono outline-none pr-10" />
+              <button onclick="document.getElementById('current-apikey').type=document.getElementById('current-apikey').type==='password'?'text':'password'" class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              </button>
+            </div>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('current-apikey').value)" class="px-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl" title="Copy">📋</button>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="regenKey()" class="flex-1 px-4 py-3 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 rounded-xl text-sm font-bold transition">🔄 Regenerate</button>
+          </div>
+          <div><input id="new-apikey" placeholder="Custom key (min 8 chars)" class="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-mono outline-none focus:border-emerald-500/50" /></div>
+          <button onclick="saveKey()" class="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold transition">Save Custom Key</button>
+          <div id="key-result" class="hidden card rounded-xl p-3 text-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Docs Page -->
+    <div id="page-docs" class="hidden p-6 space-y-4">
+      <div class="card rounded-2xl p-6 max-w-2xl space-y-3">
+        <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">API Endpoints</h3>
+        <div class="bg-zinc-900 rounded-xl p-4 font-mono text-xs"><p class="text-emerald-400">GET /health</p><p class="text-zinc-500">Health + all session statuses</p></div>
+        <div class="bg-zinc-900 rounded-xl p-4 font-mono text-xs"><p class="text-emerald-400">GET /api/sessions</p><p class="text-zinc-500">List all sessions</p></div>
+        <div class="bg-zinc-900 rounded-xl p-4 font-mono text-xs"><p class="text-yellow-400">POST /api/sessions</p><p class="text-zinc-500">Create session: {"id": "my-session"}</p></div>
+        <div class="bg-zinc-900 rounded-xl p-4 font-mono text-xs"><p class="text-yellow-400">POST /api/send/text</p><p class="text-zinc-500">Send: {"to":"628xxx","text":"Hi","sessionId":"my-session"}</p></div>
+        <div class="bg-zinc-900 rounded-xl p-4 font-mono text-xs"><p class="text-red-400">DELETE /api/sessions/:id?logout=true</p><p class="text-zinc-500">Logout & delete session</p></div>
+        <div class="bg-zinc-900 rounded-xl p-4 font-mono text-xs"><p class="text-zinc-400">Header: X-API-Key: YOUR_KEY</p></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+let token=localStorage.getItem('wa_token')||'';
+function H(){return{'Authorization':'Bearer '+token,'Content-Type':'application/json'}}
+if(token)checkAuth();
+
+async function checkAuth(){try{const r=await fetch('/api/sessions',{headers:H()});if(r.status===401){showLogin();return;}showDash();loadSessions();}catch(e){showLogin();}}
+function showLogin(){document.getElementById('login-page').classList.remove('hidden');document.getElementById('dashboard').classList.add('hidden')}
+function showDash(){document.getElementById('login-page').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');showPage('sessions')}
+
+async function doLogin(){
+  const u=document.getElementById('login-user').value.trim(),p=document.getElementById('login-pass').value,err=document.getElementById('login-err');
+  if(!u||!p){err.textContent='Fill all fields';err.classList.remove('hidden');return;}
+  try{const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();
+    if(!r.ok){err.textContent=d.error;err.classList.remove('hidden');return;}
+    token=d.token;localStorage.setItem('wa_token',token);showDash();loadSessions();
+  }catch(e){err.textContent='Error';err.classList.remove('hidden');}
+}
+function doLogout(){localStorage.removeItem('wa_token');token='';showLogin();}
+
+const titles={sessions:['Sessions','Manage WhatsApp sessions'],send:['Send Message','Send via WhatsApp'],settings:['Settings','API key management'],docs:['API Docs','REST API reference']};
+function showPage(p){
+  document.querySelectorAll('[id^="page-"]').forEach(el=>el.classList.add('hidden'));
+  document.getElementById('page-'+p)?.classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(el=>{el.classList.remove('bg-white/5','text-white');el.classList.add('text-zinc-400')});
+  document.querySelector(`.nav-item[data-page="${p}"]`)?.classList.add('bg-white/5','text-white');
+  const t=titles[p]||['',''];document.getElementById('page-title').textContent=t[0];document.getElementById('page-desc').textContent=t[1];
+  if(p==='settings')loadSettings();
+  if(p==='send')updateSendDropdown();
+}
+
+let allSessions=[];
+async function loadSessions(){
+  try{const r=await fetch('/api/sessions',{headers:H()});if(r.status===401){doLogout();return;}
+    allSessions=await r.json();document.getElementById('total-sessions').textContent=allSessions.length;
+    renderSessions();
+    // Load QR for qr_ready sessions
+    for(const s of allSessions){
+      if(s.status==='qr_ready'){
+        const qr=await fetch('/api/sessions/'+s.id+'/qr',{headers:H()});
+        if(qr.ok){const d=await qr.json();s._qr=d.qr;}
+      }
+    }
+    renderSessions();
+  }catch(e){}
+}
+
+function renderSessions(){
+  const el=document.getElementById('session-list');
+  if(!allSessions.length){el.innerHTML='<div class="card rounded-2xl p-8 text-center text-zinc-500 text-sm">No sessions. Create one above.</div>';return;}
+  el.innerHTML=allSessions.map(s=>{
+    const colors={ready:'emerald',qr_ready:'yellow',initializing:'blue',authenticated:'blue',disconnected:'red',error:'red',not_found:'zinc'};
+    const c=colors[s.status]||'red';
+    return `<div class="card rounded-2xl p-5 ${s.status==='ready'?'glow-green':s.status==='qr_ready'?'glow-yellow':''}">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-${c}-500/10 rounded-xl flex items-center justify-center">
+            <span class="text-lg">${s.status==='ready'?'✅':s.status==='qr_ready'?'📱':'⏳'}</span>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold">${s.id}</h3>
+            <p class="text-[10px] text-zinc-500">${s.phone?'+'+s.phone:'No phone connected'}</p>
+          </div>
+        </div>
+        <span class="text-[10px] font-black px-2.5 py-1 rounded-full bg-${c}-500/10 text-${c}-400 uppercase">${s.status.replace('_',' ')}</span>
+      </div>
+      ${s._qr?`<div class="bg-white p-3 rounded-xl inline-block mb-4"><img src="data:image/png;base64,${s._qr}" class="w-48 h-48"/></div><p class="text-[10px] text-zinc-500 mb-4">Scan with WhatsApp → Linked Devices</p>`:''}
+      <div class="flex gap-2">
+        <button onclick="startSess('${s.id}')" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg text-xs font-bold transition">▶ Start</button>
+        <button onclick="deleteSess('${s.id}',false)" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold transition">⏹ Stop</button>
+        <button onclick="deleteSess('${s.id}',true)" class="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-xs font-bold transition">🗑 Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addSession(){
+  const id=document.getElementById('new-session-id').value.trim();if(!id)return;
+  await fetch('/api/sessions',{method:'POST',headers:H(),body:JSON.stringify({id})});
+  document.getElementById('new-session-id').value='';
+  setTimeout(loadSessions,2000);
+}
+async function startSess(id){await fetch('/api/sessions',{method:'POST',headers:H(),body:JSON.stringify({id})});setTimeout(loadSessions,2000);}
+async function deleteSess(id,logout){
+  if(logout&&!confirm('Delete session '+id+'?'))return;
+  await fetch('/api/sessions/'+id+(logout?'?logout=true':''),{method:'DELETE',headers:H()});
+  setTimeout(loadSessions,1000);
+}
+
+function updateSendDropdown(){
+  const sel=document.getElementById('send-session');
+  sel.innerHTML=allSessions.filter(s=>s.status==='ready').map(s=>`<option value="${s.id}">${s.id} (${s.phone||'?'})</option>`).join('');
+  if(!sel.innerHTML)sel.innerHTML='<option value="">No connected sessions</option>';
+}
+
+async function sendMsg(){
+  const sid=document.getElementById('send-session').value,ph=document.getElementById('send-phone').value,msg=document.getElementById('send-msg').value;
+  const el=document.getElementById('send-result');el.classList.remove('hidden');el.innerHTML='<span class="text-zinc-400">Sending...</span>';
+  try{const r=await fetch('/api/send/text',{method:'POST',headers:H(),body:JSON.stringify({to:ph,text:msg,sessionId:sid})});const d=await r.json();
+    el.innerHTML=d.success?'<span class="text-emerald-400">✅ Sent! '+d.messageId+'</span>':'<span class="text-red-400">❌ '+d.error+'</span>';
+  }catch(e){el.innerHTML='<span class="text-red-400">❌ '+e.message+'</span>';}
+}
+
+async function loadSettings(){try{const r=await fetch('/api/settings',{headers:H()});const d=await r.json();document.getElementById('current-apikey').value=d.apiKey;}catch(e){}}
+async function regenKey(){
+  if(!confirm('Regenerate API key?'))return;
+  const r=await fetch('/api/settings/apikey/regenerate',{method:'POST',headers:H()});const d=await r.json();
+  document.getElementById('current-apikey').value=d.apiKey;
+  const el=document.getElementById('key-result');el.classList.remove('hidden');el.innerHTML='<span class="text-emerald-400">✅ Regenerated!</span>';
+}
+async function saveKey(){
+  const k=document.getElementById('new-apikey').value.trim();if(k.length<8){alert('Min 8 chars');return;}
+  const r=await fetch('/api/settings/apikey',{method:'PUT',headers:H(),body:JSON.stringify({apiKey:k})});const d=await r.json();
+  document.getElementById('current-apikey').value=d.apiKey;document.getElementById('new-apikey').value='';
+  const el=document.getElementById('key-result');el.classList.remove('hidden');el.innerHTML='<span class="text-emerald-400">✅ Saved!</span>';
+}
+
+setInterval(()=>{if(token)loadSessions();},5000);
+</script>
+</body>
+</html>
