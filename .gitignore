@@ -1,0 +1,6 @@
+node_modules/
+baileys-sessions/
+sessions/
+config.json
+*.bak.*
+.env
